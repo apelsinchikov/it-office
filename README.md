@@ -10,7 +10,7 @@ Idle-tycoon про IT-отдел: вы директор компании и ра
 - TypeScript + Vite + PixiJS 8 (сцена), HTML поверх сцены (интерфейс)
 - GitHub Pages — хостинг, выкладка через GitHub Actions при каждом push в `main`
 - Telegram Mini App — запуск через бота
-- Supabase — сохранения и рейтинг (этап 5)
+- Telegram CloudStorage — сохранение прогресса (рейтинг и сервер — после MVP)
 
 ## Запуск у себя
 
