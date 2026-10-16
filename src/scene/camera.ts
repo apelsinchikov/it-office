@@ -1,0 +1,176 @@
+import type { Container } from 'pixi.js';
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface Pt {
+  x: number;
+  y: number;
+}
+
+const MAX_ZOOM = 1.8; // дальше приближать нельзя: спрайты начнут мылиться
+const TAP_SLOP = 10; // смещение пальца, после которого это уже не тап, а перетаскивание
+const FOCUS_SEC = 0.45;
+
+/**
+ * Камера: перетаскивание одним пальцем, щипок двумя, колесо мыши.
+ * Двигает и масштабирует контейнер офиса. Тап по сцене отдаёт в onTap экранные координаты.
+ */
+export class Camera {
+  onTap: (x: number, y: number) => void = () => {};
+
+  private minScale = 0.3;
+  private maxScale = MAX_ZOOM;
+  private readonly pointers = new Map<number, Pt>();
+  private downAt: Pt | null = null;
+  private moved = false;
+  private pinch: { dist: number; scale: number; world: Pt } | null = null;
+  private anim: { t: number; from: Pt; fromScale: number; to: Pt; toScale: number } | null = null;
+
+  constructor(
+    private readonly target: Container,
+    private readonly bounds: Rect,
+    private readonly el: HTMLElement,
+    private readonly screen: () => { width: number; height: number },
+    /** Сколько пикселей сверху и снизу закрыто интерфейсом. */
+    private readonly insets: () => { top: number; bottom: number },
+  ) {
+    el.addEventListener('pointerdown', this.onDown);
+    el.addEventListener('pointermove', this.onMove);
+    el.addEventListener('pointerup', this.onUp);
+    el.addEventListener('pointercancel', this.onUp);
+    el.addEventListener('wheel', this.onWheel, { passive: false });
+    this.fit();
+  }
+
+  /** Показать весь этаж целиком. */
+  fit(): void {
+    const s = this.screen();
+    const ins = this.insets();
+    const avail = { w: s.width - 24, h: s.height - ins.top - ins.bottom - 24 };
+    const fitScale = Math.min(avail.w / this.bounds.width, avail.h / this.bounds.height);
+    this.minScale = fitScale;
+    this.maxScale = Math.max(MAX_ZOOM, fitScale);
+    this.target.scale.set(fitScale);
+    const cx = this.bounds.x + this.bounds.width / 2;
+    const cy = this.bounds.y + this.bounds.height / 2;
+    this.target.position.set(s.width / 2 - cx * fitScale, ins.top + 12 + avail.h / 2 - cy * fitScale);
+    this.clamp();
+  }
+
+  /** Плавно подлететь к точке офиса. */
+  focusOn(world: Pt, zoom: number): void {
+    const s = this.screen();
+    const ins = this.insets();
+    const toScale = this.clampScale(zoom);
+    const visibleMidY = ins.top + (s.height - ins.top - ins.bottom) / 2;
+    this.anim = {
+      t: 0,
+      from: { x: this.target.x, y: this.target.y },
+      fromScale: this.target.scale.x,
+      to: { x: s.width / 2 - world.x * toScale, y: visibleMidY - world.y * toScale },
+      toScale,
+    };
+  }
+
+  update(dt: number): void {
+    if (!this.anim) return;
+    const a = this.anim;
+    a.t = Math.min(1, a.t + dt / FOCUS_SEC);
+    const e = 1 - (1 - a.t) ** 3; // плавное торможение
+    this.target.scale.set(a.fromScale + (a.toScale - a.fromScale) * e);
+    this.target.position.set(a.from.x + (a.to.x - a.from.x) * e, a.from.y + (a.to.y - a.from.y) * e);
+    if (a.t >= 1) {
+      this.anim = null;
+      this.clamp();
+    }
+  }
+
+  private clampScale(s: number): number {
+    return Math.min(this.maxScale, Math.max(this.minScale, s));
+  }
+
+  /** Центр экрана всегда остаётся над офисом — улететь в пустоту нельзя. */
+  private clamp(): void {
+    const s = this.screen();
+    const k = this.target.scale.x;
+    const b = this.bounds;
+    const minX = s.width / 2 - (b.x + b.width) * k;
+    const maxX = s.width / 2 - b.x * k;
+    const minY = s.height / 2 - (b.y + b.height) * k;
+    const maxY = s.height / 2 - b.y * k;
+    this.target.x = Math.min(maxX, Math.max(minX, this.target.x));
+    this.target.y = Math.min(maxY, Math.max(minY, this.target.y));
+  }
+
+  private toWorld(p: Pt): Pt {
+    const k = this.target.scale.x;
+    return { x: (p.x - this.target.x) / k, y: (p.y - this.target.y) / k };
+  }
+
+  private zoomAround(screenPt: Pt, world: Pt, scale: number): void {
+    const k = this.clampScale(scale);
+    this.target.scale.set(k);
+    this.target.position.set(screenPt.x - world.x * k, screenPt.y - world.y * k);
+    this.clamp();
+  }
+
+  private twoFinger(): { mid: Pt; dist: number } {
+    const [a, b] = [...this.pointers.values()];
+    return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+  }
+
+  private readonly onDown = (e: PointerEvent): void => {
+    this.anim = null;
+    this.el.setPointerCapture(e.pointerId);
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pointers.size === 1) {
+      this.downAt = { x: e.clientX, y: e.clientY };
+      this.moved = false;
+    } else if (this.pointers.size === 2) {
+      this.moved = true; // щипок — точно не тап
+      const { mid, dist } = this.twoFinger();
+      this.pinch = { dist, scale: this.target.scale.x, world: this.toWorld(mid) };
+    }
+  };
+
+  private readonly onMove = (e: PointerEvent): void => {
+    const prev = this.pointers.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    this.pointers.set(e.pointerId, cur);
+
+    if (this.pointers.size >= 2 && this.pinch) {
+      const { mid, dist } = this.twoFinger();
+      this.zoomAround(mid, this.pinch.world, (this.pinch.scale * dist) / Math.max(1, this.pinch.dist));
+      return;
+    }
+    if (this.downAt && Math.hypot(cur.x - this.downAt.x, cur.y - this.downAt.y) > TAP_SLOP) this.moved = true;
+    if (this.moved) {
+      this.target.x += cur.x - prev.x;
+      this.target.y += cur.y - prev.y;
+      this.clamp();
+    }
+  };
+
+  private readonly onUp = (e: PointerEvent): void => {
+    if (!this.pointers.has(e.pointerId)) return;
+    this.pointers.delete(e.pointerId);
+    if (this.pointers.size < 2) this.pinch = null;
+    if (this.pointers.size === 0) {
+      if (!this.moved && e.type === 'pointerup') this.onTap(e.clientX, e.clientY);
+      this.downAt = null;
+    }
+  };
+
+  private readonly onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    this.anim = null;
+    const p = { x: e.clientX, y: e.clientY };
+    this.zoomAround(p, this.toWorld(p), this.target.scale.x * Math.exp(-e.deltaY * 0.0015));
+  };
+}
