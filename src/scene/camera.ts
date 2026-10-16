@@ -62,8 +62,15 @@ export class Camera {
     this.clamp();
   }
 
-  /** Плавно подлететь к точке офиса. */
-  focusOn(world: Pt, zoom: number): void {
+  /** Масштаб, при котором прямоугольник w×h (в координатах офиса) целиком помещается в видимую часть экрана. */
+  zoomToFit(w: number, h: number): number {
+    const s = this.screen();
+    const ins = this.insets();
+    return this.clampScale(Math.min((s.width - 24) / w, (s.height - ins.top - ins.bottom - 24) / h));
+  }
+
+  /** Подлететь к точке офиса: плавно или сразу (instant). */
+  focusOn(world: Pt, zoom: number, instant = false): void {
     const s = this.screen();
     const ins = this.insets();
     const toScale = this.clampScale(zoom);
@@ -75,6 +82,7 @@ export class Camera {
       to: { x: s.width / 2 - world.x * toScale, y: visibleMidY - world.y * toScale },
       toScale,
     };
+    if (instant) this.update(FOCUS_SEC);
   }
 
   update(dt: number): void {

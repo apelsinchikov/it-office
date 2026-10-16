@@ -3,6 +3,7 @@ import './style.css';
 import { Game } from './game/game';
 import { loadState, saveState } from './game/state';
 import { Camera } from './scene/camera';
+import { ROOMS, ROOM_H, ROOM_W, WALL_H, roomCenter } from './scene/layout';
 import { OfficeView } from './scene/office';
 import { initTelegram } from './telegram';
 import { Hud } from './ui/hud';
@@ -35,6 +36,13 @@ async function start(): Promise<void> {
     () => ({ top: hud.topInset, bottom: hud.bottomInset() }),
   );
 
+  // Комната со стенами и подписями над столами: чуть больше самого ромба.
+  const roomZoom = (): number => camera.zoomToFit(ROOM_W + 40, ROOM_H + WALL_H + 150);
+  const support = ROOMS.find((r) => r.id === 'support');
+  const showSupport = (instant: boolean): void => {
+    if (support) camera.focusOn(roomCenter(support.col, support.row), roomZoom(), instant);
+  };
+
   camera.onTap = (x, y) => {
     const local = office.container.toLocal({ x, y });
     const hit = office.roomAt(local.x, local.y);
@@ -43,11 +51,13 @@ async function start(): Promise<void> {
       return;
     }
     hud.open(hit.def);
-    // панель уже открыта — камера учитывает её высоту
-    requestAnimationFrame(() => camera.focusOn(hit.center, 1.1));
+    // ждём кадр, чтобы панель получила высоту, — камера учитывает её
+    requestAnimationFrame(() => camera.focusOn(hit.center, roomZoom()));
   };
-  hud.onClose = () => camera.fit();
-  app.renderer.on('resize', () => camera.fit());
+  hud.onClose = () => {};
+  app.renderer.on('resize', () => showSupport(true));
+  // На старте в MVP работает только поддержка — показываем её крупно; весь этаж виден щипком.
+  showSupport(true);
 
   app.ticker.add((ticker) => {
     // если вкладка была скрыта, не начисляем «пропущенное» разом (офлайн-доход — этап 3)
