@@ -62,6 +62,18 @@ export class Camera {
     this.clamp();
   }
 
+  /** После поворота экрана / смены размера: пересчитать пределы зума, не сбивая вид. */
+  onResize(): void {
+    const s = this.screen();
+    const ins = this.insets();
+    const fitScale = Math.min((s.width - 24) / this.bounds.width, (s.height - ins.top - ins.bottom - 24) / this.bounds.height);
+    this.minScale = fitScale;
+    this.maxScale = Math.max(MAX_ZOOM, fitScale);
+    const k = this.clampScale(this.target.scale.x);
+    this.target.scale.set(k);
+    this.clamp();
+  }
+
   /** Масштаб, при котором прямоугольник w×h (в координатах офиса) целиком помещается в видимую часть экрана. */
   zoomToFit(w: number, h: number): number {
     const s = this.screen();

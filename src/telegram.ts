@@ -6,6 +6,7 @@ interface TgUser {
   first_name: string;
   last_name?: string;
   username?: string;
+  language_code?: string;
 }
 
 interface TgWebApp {
@@ -18,6 +19,8 @@ interface TgWebApp {
   expand(): void;
   disableVerticalSwipes?(): void;
   isVersionAtLeast?(version: string): boolean;
+  setHeaderColor?(color: string): void;
+  setBackgroundColor?(color: string): void;
 }
 
 declare global {
@@ -46,6 +49,15 @@ export function initTelegram(): TelegramInfo {
   // Чтобы свайп по офису вниз не закрывал игру (Bot API 7.7+).
   if (tg.disableVerticalSwipes && tg.isVersionAtLeast?.('7.7')) {
     tg.disableVerticalSwipes();
+  }
+
+  try {
+    if (tg.isVersionAtLeast?.('6.1')) {
+      tg.setHeaderColor?.('#262338');
+      tg.setBackgroundColor?.('#262338');
+    }
+  } catch {
+    // старый клиент
   }
 
   return {

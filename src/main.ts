@@ -1,33 +1,120 @@
 import { Application } from 'pixi.js';
 import './style.css';
+import { play, setSound, unlockAudio } from './audio';
+import { checkAchievements, ACHIEVEMENTS } from './game/achievements';
+import { companyDef } from './game/config';
+import { eventIdAt, eventMod } from './game/events';
 import { Game } from './game/game';
-import { loadState, saveState } from './game/state';
+import { claimableCount, ensureDaily } from './game/quests';
+import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
+import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
-import { ROOMS, ROOM_H, ROOM_W, WALL_H, roomCenter } from './scene/layout';
+import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
 import { initTelegram } from './telegram';
+import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
+import { Tutorial } from './ui/tutorial';
 
-const SAVE_EVERY_MS = 5000;
+const VERSION = '1.0.0';
+const SAVE_LOCAL_MS = 5000;
+const SAVE_CLOUD_MS = 45000;
+const OFFLINE_MIN_SEC = 60;
 
 async function start(): Promise<void> {
-  initTelegram();
+  const tg = initTelegram();
+  const state = loadLocal();
+  setLang(state.settings.lang ?? detectLang(tg.user?.language_code));
+  setSound(state.settings.sound);
+
+  const rng = Math.random;
+  const game = new Game(state, rng);
+  const applyEvent = (): string | null => {
+    const id = eventIdAt(Date.now());
+    game.event = eventMod(id);
+    return id;
+  };
+  let eventId = applyEvent();
+  ensureDaily(game, Date.now());
 
   const app = new Application();
   await app.init({
     resizeTo: window,
-    background: '#1e2230',
+    background: '#262338',
     antialias: true,
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
   document.getElementById('game')?.appendChild(app.canvas);
 
-  const game = new Game(loadState());
-  const office = new OfficeView(game);
+  const office = new OfficeView(game, rng);
+  office.setEvent(eventId);
+  app.renderer.background.color = office.themeBg;
   app.stage.addChild(office.container);
 
-  const hud = new Hud(game);
+  const save = (): void => saveLocal(game.state);
+  const saveAll = (): void => {
+    save();
+    void saveCloud(game.state);
+  };
+
+  // eslint-disable-next-line prefer-const
+  let tutorial: Tutorial;
+  const hud = new Hud(game, {
+    onAvral: () => {
+      if (game.startAvral()) {
+        play('avral');
+        hud.toast(t('avral.active'), 'good');
+      } else play('error');
+    },
+    onDirectorDesk: () => {
+      if (game.state.directorDesk === 0) {
+        game.state.directorDesk = 1;
+        office.syncDirectorDesk();
+        play('hire');
+      }
+    },
+    onLang: (l) => {
+      game.state.settings.lang = l;
+      saveAll();
+      location.reload();
+    },
+    onSound: (on) => {
+      game.state.settings.sound = on;
+      setSound(on);
+      if (on) play('click');
+    },
+    onReset: () => {
+      clearLocal();
+      clearCloud();
+      setTimeout(() => location.reload(), 300);
+    },
+    onTutorial: () => tutorial.start(),
+    onReorg: () => {
+      const g = game.reorg();
+      if (g > 0) {
+        play('reorg');
+        hud.toast(t('toast.reorg', { n: g }), 'good');
+        focusRoom(roomById('support'));
+        saveAll();
+      }
+    },
+    onCompany: () => {
+      if (game.changeCompany()) {
+        play('achieve');
+        app.renderer.background.color = office.themeBg;
+        hud.toast(t('toast.company', { name: t(`company.${companyDef(game.state.company).style}` as Key) }), 'good');
+        hud.close();
+        focusRoom(roomById('support'));
+        saveAll();
+      }
+    },
+    onClose: () => {},
+    sfx: (s) => play(s),
+    cloud: cloudAvailable(),
+    version: VERSION,
+  });
+
   const camera = new Camera(
     office.container,
     office.bounds(),
@@ -35,51 +122,145 @@ async function start(): Promise<void> {
     () => app.screen,
     () => ({ top: hud.topInset, bottom: hud.bottomInset() }),
   );
-
-  // Комната со стенами и подписями над столами: чуть больше самого ромба.
   const roomZoom = (): number => camera.zoomToFit(ROOM_W + 40, ROOM_H + WALL_H + 150);
-  const support = ROOMS.find((r) => r.id === 'support');
-  const showSupport = (instant: boolean): void => {
-    if (support) camera.focusOn(roomCenter(support.col, support.row), roomZoom(), instant);
+  const focusRoom = (def: RoomDef, instant = false): void => {
+    requestAnimationFrame(() => camera.focusOn(office.roomFocus(def), roomZoom(), instant));
   };
 
+  const fx = new Fx(
+    game,
+    office,
+    (p) => office.container.toGlobal(p),
+    () => office.container.scale.x,
+  );
+  fx.onTicket = (reward, d, k) => {
+    office.bigPopup(d, k, reward);
+    play('ticket');
+  };
+  fx.onPhrase = (id) => {
+    if (!game.state.phrasesSeen.includes(id)) game.state.phrasesSeen.push(id);
+  };
+
+  tutorial = new Tutorial(
+    (def) => focusRoom(def),
+    () => {
+      game.state.directorDesk = 1;
+      office.syncDirectorDesk();
+      play('hire');
+    },
+    () => game.state.directorDesk > 0,
+    () => {
+      game.state.tutorialDone = true;
+      save();
+      const support = roomById('support');
+      hud.open({ kind: 'room', def: support });
+      focusRoom(support);
+    },
+    (on) => {
+      hud.setHidden(on);
+      fx.enabled = !on;
+    },
+  );
+
   camera.onTap = (x, y) => {
+    unlockAudio();
+    if (tutorial.active) return;
     const local = office.container.toLocal({ x, y });
-    const hit = office.roomAt(local.x, local.y);
-    if (!hit) {
+    const def = office.roomAt(local.x, local.y);
+    if (!def) {
       if (hud.isOpen()) hud.close();
       return;
     }
-    hud.open(hit.def);
-    // ждём кадр, чтобы панель получила высоту, — камера учитывает её
-    requestAnimationFrame(() => camera.focusOn(hit.center, roomZoom()));
+    play('click');
+    hud.open({ kind: 'room', def });
+    focusRoom(def);
   };
-  hud.onClose = () => {};
-  app.renderer.on('resize', () => showSupport(true));
-  // На старте в MVP работает только поддержка — показываем её крупно; весь этаж виден щипком.
-  showSupport(true);
+  window.addEventListener('pointerdown', unlockAudio, { capture: true });
+  app.renderer.on('resize', () => camera.onResize());
+
+  // офлайн-доход
+  const offerOffline = (sec: number): void => {
+    if (sec < OFFLINE_MIN_SEC) return;
+    const capped = Math.min(sec, game.offlineCapSec());
+    const amount = game.incomePerSec(true) * capped;
+    if (!(amount > 0)) return;
+    hud.showOffline(capped, amount, game.company().offlineCapH, () => {
+      game.applyOffline(capped);
+      play('coin');
+    });
+  };
+
+  // старт: обучение или поддержка крупным планом
+  focusRoom(roomById('support'), true);
+  if (!game.state.tutorialDone) tutorial.start();
+  else offerOffline((Date.now() - game.state.lastSeen) / 1000);
+  if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
+
+  // сохранение в Telegram: если там прогресс дальше — берём его
+  void loadCloud().then((cloud) => {
+    if (cloud && better(game.state, cloud) === cloud) {
+      saveLocal(cloud);
+      location.reload();
+    }
+  });
+
+  // свёрнута игра — не тикаем, при возврате считаем офлайн
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      saveAll();
+    } else if (hiddenAt) {
+      const sec = (Date.now() - hiddenAt) / 1000;
+      hiddenAt = 0;
+      if (!tutorial.active) offerOffline(sec);
+    }
+  });
+  window.addEventListener('pagehide', saveAll);
+  window.setInterval(save, SAVE_LOCAL_MS);
+  window.setInterval(() => void saveCloud(game.state), SAVE_CLOUD_MS);
+
+  // раз в секунду: достижения, задания, события
+  let lastClaimable = claimableCount(game);
+  let sec = 0;
+  window.setInterval(() => {
+    sec++;
+    for (const id of checkAchievements(game.state)) {
+      const a = ACHIEVEMENTS.find((x) => x.id === id);
+      if (a) {
+        hud.toast(t('toast.achievement', { name: tr(a.title) }), 'good');
+        play('achieve');
+      }
+    }
+    const c = claimableCount(game);
+    if (c > lastClaimable && !tutorial.active) hud.toast(t('toast.quest'));
+    lastClaimable = c;
+    if (sec % 60 === 0) {
+      if (ensureDaily(game, Date.now())) lastClaimable = claimableCount(game);
+      const id = applyEvent();
+      if (id !== eventId) {
+        eventId = id;
+        office.setEvent(id);
+        hud.setEvent(id ? t(`event.${id}` as Key) : null);
+      }
+    }
+  }, 1000);
 
   app.ticker.add((ticker) => {
-    // если вкладка была скрыта, не начисляем «пропущенное» разом (офлайн-доход — этап 3)
     const dt = Math.min(ticker.deltaMS / 1000, 1);
-    const payouts = game.tick(dt);
-    office.update(dt, payouts);
+    if (document.visibilityState !== 'hidden') game.tick(dt, !tutorial.active);
+    office.update(dt, game.isAvral() ? 2.5 : 1);
     camera.update(dt);
+    fx.update(dt);
     hud.update(performance.now());
+    document.body.classList.toggle('avral', game.isAvral());
   });
-
-  const save = (): void => saveState(game.state);
-  window.setInterval(save, SAVE_EVERY_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') save();
-  });
-  window.addEventListener('pagehide', save);
 }
 
 start().catch((err: unknown) => {
   console.error(err);
   document.body.insertAdjacentHTML(
     'beforeend',
-    `<pre style="position:fixed;bottom:0;left:0;right:0;color:#f88;white-space:pre-wrap;padding:16px">${String(err)}</pre>`,
+    `<pre style="position:fixed;bottom:0;left:0;right:0;color:#f88;white-space:pre-wrap;padding:16px;z-index:99">${String(err)}</pre>`,
   );
 });

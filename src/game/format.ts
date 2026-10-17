@@ -1,6 +1,6 @@
-// Короткая запись больших чисел: 950, 1,2K, 34,5M, 678B, 1,2T, потом aa, ab, ac…
+// Короткая запись больших чисел: 950, 1,2K, 34,5M, 678B, 1,2T, 5Qa, 7Qi … потом aa, ab, ac…
 
-const SUFFIXES = ['', 'K', 'M', 'B', 'T'];
+const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
 
 function suffix(i: number): string {
   if (i < SUFFIXES.length) return SUFFIXES[i];

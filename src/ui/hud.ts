@@ -1,188 +1,305 @@
-// Интерфейс поверх сцены — обычный HTML: баланс сверху и панель улучшений снизу.
+// Оболочка интерфейса: верхняя полоса, «Аврал», нижнее меню, выдвижная панель, тосты, окна.
 
-import { nextMilestone } from '../game/economy';
+import { bestPurchase, type Purchase } from '../game/advisor';
 import { formatNumber } from '../game/format';
-import type { Game } from '../game/game';
-import { DESKS } from '../game/state';
+import type { Game, GameEvent } from '../game/game';
+import { claimableCount } from '../game/quests';
+import { duration, t, type Key } from '../i18n';
 import type { RoomDef } from '../scene/layout';
+import { ICONS, h } from './dom';
+import {
+  collectionPanel,
+  deptPanel,
+  directorPanel,
+  grantsPanel,
+  notePanel,
+  questsPanel,
+  restPanel,
+  settingsPanel,
+  type BuyMode,
+  type Ctx,
+  type Panel,
+} from './panels';
 
-type BuyMode = 1 | 10 | 'max';
+export type Sheet =
+  | { kind: 'room'; def: RoomDef }
+  | { kind: 'grants' }
+  | { kind: 'quests' }
+  | { kind: 'collection' }
+  | { kind: 'settings' };
 
-const NAMES = [
-  ['Галя', 'Витя', 'Оля', 'Серёга', 'Маша', 'Дима'],
-  ['Артём', 'Лёша', 'Катя', 'Никита', 'Женя', 'Рома'],
-  ['Света', 'Паша', 'Ира', 'Денис', 'Аня', 'Костя'],
-  ['Юля', 'Миша', 'Настя', 'Игорь', 'Лена', 'Саша'],
-  ['Боря', 'Валера', 'Толик', 'Гена', 'Стас', 'Петрович'],
-];
-
-const ROOM_NOTES: Record<string, string> = {
-  hall: 'Холл. Здесь будут бродить сотрудники и возникать идеи.',
-  director: 'Кабинет директора IT. Кнопка «Аврал» появится на этапе 3.',
-  rest: 'Зона отдыха: кофемашина, холодильник и приставка — на этапе 2.',
-  toilet: 'Туалет. Одна кабинка, очередей не будет.',
-};
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-
-interface WorkerRow {
-  desk: number;
-  level: HTMLElement;
-  income: HTMLElement;
-  hint: HTMLElement;
-  button: HTMLButtonElement;
-  buttonLabel: HTMLElement;
-  buttonCost: HTMLElement;
+export interface HudHandlers {
+  onAvral(): void;
+  onDirectorDesk(): void;
+  onLang(l: 'ru' | 'en'): void;
+  onSound(on: boolean): void;
+  onReset(): void;
+  onTutorial(): void;
+  onReorg(): void;
+  onCompany(): void;
+  onClose(): void;
+  sfx: Ctx['sfx'];
+  cloud: boolean;
+  version: string;
 }
 
 export class Hud {
-  /** Высота верхней полосы и открытой панели — чтобы камера не прятала офис под ними. */
-  readonly topInset = 64;
-
-  private readonly coinsEl: HTMLElement;
-  private readonly rateEl: HTMLElement;
-  private readonly panel: HTMLElement;
-  private readonly title: HTMLElement;
-  private readonly body: HTMLElement;
-  private readonly modeButtons = new Map<BuyMode, HTMLButtonElement>();
-  private rows: WorkerRow[] = [];
+  readonly topInset = 70;
+  private readonly root: HTMLElement;
+  private readonly coins: HTMLElement;
+  private readonly rate: HTMLElement;
+  private readonly grantsChip: HTMLButtonElement;
+  private readonly eventChip: HTMLElement;
+  private readonly avralBtn: HTMLButtonElement;
+  private readonly avralLabel: HTMLElement;
+  private readonly sheetEl: HTMLElement;
+  private readonly sheetTitle: HTMLElement;
+  private readonly sheetSub: HTMLElement;
+  private readonly sheetBody: HTMLElement;
+  private readonly nav: HTMLElement;
+  private readonly navBtns = new Map<string, HTMLButtonElement>();
+  private readonly questBadge: HTMLElement;
+  private readonly toasts: HTMLElement;
+  private readonly modal: HTMLElement;
+  private sheet: Sheet | null = null;
+  private panel: Panel | null = null;
   private mode: BuyMode = 1;
-  private room: RoomDef | null = null;
-  private lastRefresh = 0;
+  private expanded = new Set<string>();
+  private colTab: { v: 'ach' | 'phr' } = { v: 'ach' };
+  private last = 0;
+  private best: Purchase | undefined;
+  private ctx: Ctx;
+  hidden = false;
 
-  onClose: () => void = () => {};
-
-  constructor(private readonly game: Game) {
+  constructor(
+    private readonly game: Game,
+    private readonly hd: HudHandlers,
+  ) {
     const root = document.getElementById('hud');
     if (!root) throw new Error('нет #hud');
+    this.root = root;
     root.replaceChildren();
 
-    const top = el('div', 'topbar');
-    const coins = el('div', 'coins');
-    coins.append(el('span', 'coin-icon', 'tc'));
-    this.coinsEl = el('span', 'coins-value', '0');
-    coins.append(this.coinsEl);
-    this.rateEl = el('div', 'rate', '+0/сек');
-    top.append(coins, this.rateEl);
+    // верхняя полоса
+    this.coins = h('span', { class: 'coins-value', text: '0' });
+    this.rate = h('span', { class: 'rate' });
+    this.grantsChip = h('button', { class: 'chip grants-chip', aria: t('nav.grants') });
+    this.grantsChip.addEventListener('click', () => this.toggle({ kind: 'grants' }));
+    this.eventChip = h('span', { class: 'chip event-chip' });
+    this.eventChip.style.display = 'none';
+    const top = h(
+      'div',
+      { class: 'topbar' },
+      h('div', { class: 'coins' }, h('span', { class: 'coin-icon', text: 'tc', aria: 'techCoin' }), h('div', { class: 'coins-col' }, this.coins, this.rate)),
+      h('div', { class: 'chips' }, this.eventChip, this.grantsChip),
+    );
 
-    this.panel = el('div', 'panel hidden');
-    const head = el('div', 'panel-head');
-    this.title = el('div', 'panel-title');
-    const close = el('button', 'panel-close', '×');
-    close.setAttribute('aria-label', 'Закрыть');
+    // «Аврал»
+    this.avralLabel = h('span', { class: 'avral-label' });
+    this.avralBtn = h('button', { class: 'avral-btn', aria: t('avral') }, h('span', { class: 'avral-icon', html: ICONS.fire }), this.avralLabel);
+    this.avralBtn.addEventListener('click', () => hd.onAvral());
+
+    // панель
+    this.sheetTitle = h('div', { class: 'sheet-title' });
+    this.sheetSub = h('div', { class: 'sheet-sub' });
+    const close = h('button', { class: 'icon-btn', html: ICONS.close, aria: t('close') });
     close.addEventListener('click', () => this.close());
-    head.append(this.title, close);
+    this.sheetBody = h('div', { class: 'sheet-body' });
+    this.sheetEl = h('section', { class: 'sheet hidden', attrs: { 'aria-live': 'polite' } }, h('div', { class: 'sheet-head' }, h('div', {}, this.sheetTitle, this.sheetSub), close), this.sheetBody);
 
-    const modes = el('div', 'modes');
-    for (const m of [1, 10, 'max'] as BuyMode[]) {
-      const b = el('button', 'mode', m === 'max' ? 'Макс' : `×${m}`);
+    // меню
+    this.questBadge = h('span', { class: 'badge' });
+    this.nav = h('nav', { class: 'nav' });
+    const items: [string, Key, string][] = [
+      ['office', 'nav.office', ICONS.office],
+      ['quests', 'nav.quests', ICONS.quests],
+      ['grants', 'nav.grants', ICONS.grants],
+      ['collection', 'nav.collection', ICONS.collection],
+      ['settings', 'nav.settings', ICONS.settings],
+    ];
+    for (const [id, key, icon] of items) {
+      const b = h('button', { class: 'nav-btn' }, h('span', { class: 'nav-icon', html: icon }), h('span', { class: 'nav-label', text: t(key) }));
+      if (id === 'quests') b.append(this.questBadge);
       b.addEventListener('click', () => {
-        this.mode = m;
-        this.refresh(true);
+        hd.sfx('click');
+        if (id === 'office') this.close();
+        else this.toggle({ kind: id as 'grants' | 'quests' | 'collection' | 'settings' });
       });
-      this.modeButtons.set(m, b);
-      modes.append(b);
+      this.navBtns.set(id, b);
+      this.nav.append(b);
     }
 
-    this.body = el('div', 'panel-body');
-    this.panel.append(head, modes, this.body);
-    root.append(top, this.panel);
+    this.toasts = h('div', { class: 'toasts', attrs: { 'aria-live': 'polite' } });
+    this.modal = h('div', { class: 'modal hidden' });
+    root.append(top, this.toasts, this.avralBtn, this.sheetEl, this.nav, this.modal);
+
+    this.ctx = {
+      game,
+      mode: () => this.mode,
+      setMode: (m) => (this.mode = m),
+      best: () => this.best,
+      sfx: hd.sfx,
+      toast: (s) => this.toast(s),
+      rebuild: () => this.rebuild(),
+      expanded: this.expanded,
+      onAvral: hd.onAvral,
+      onDirectorDesk: hd.onDirectorDesk,
+      onLang: hd.onLang,
+      onSound: hd.onSound,
+      onReset: hd.onReset,
+      onTutorial: hd.onTutorial,
+      onReorg: hd.onReorg,
+      onCompany: hd.onCompany,
+      cloud: hd.cloud,
+      version: hd.version,
+    };
+
+    game.on((e) => this.onGame(e));
   }
 
-  bottomInset(): number {
-    return this.panel.classList.contains('hidden') ? 16 : this.panel.offsetHeight + 8;
+  private onGame(e: GameEvent): void {
+    // структура панели меняется — перестраиваем
+    if (['hire', 'unlock', 'manager', 'reorg', 'company'].includes(e.type) && this.sheet) this.rebuild();
+  }
+
+  setHidden(hidden: boolean): void {
+    this.hidden = hidden;
+    this.root.classList.toggle('tutorial-mode', hidden);
+    if (hidden) this.close();
   }
 
   isOpen(): boolean {
-    return this.room !== null;
+    return this.sheet !== null;
   }
 
-  open(room: RoomDef): void {
-    this.room = room;
-    this.title.textContent = room.name;
-    this.body.replaceChildren();
-    this.rows = [];
-    const modes = this.panel.querySelector<HTMLElement>('.modes');
+  current(): Sheet | null {
+    return this.sheet;
+  }
 
-    const isWorkingDept = room.kind === 'dept' && room.dept === 0;
-    if (modes) modes.style.display = isWorkingDept ? '' : 'none';
+  bottomInset(): number {
+    const navH = this.nav.offsetHeight || 64;
+    return this.sheet ? this.sheetEl.offsetHeight + navH + 8 : navH + 90;
+  }
 
-    if (room.kind !== 'dept' || room.dept === undefined) {
-      this.body.append(el('p', 'note', ROOM_NOTES[room.id] ?? ''));
-    } else if (room.dept !== 0) {
-      this.body.append(el('p', 'note', 'Отдел откроется на этапе 2: сначала прокачайте поддержку.'));
-    } else {
-      const d = room.dept;
-      for (let k = 0; k < DESKS; k++) {
-        if (this.game.isHired(d, k)) this.rows.push(this.buildRow(d, k));
+  private build(s: Sheet): Panel {
+    const ctx = this.ctx;
+    switch (s.kind) {
+      case 'room': {
+        const def = s.def;
+        if (def.kind === 'dept') return deptPanel(ctx, def.dept!);
+        if (def.kind === 'rest') return restPanel(ctx);
+        if (def.kind === 'director') return directorPanel(ctx);
+        return notePanel(def);
       }
-      this.body.append(el('p', 'note small', 'Следующий сотрудник — после 25 уровня первого (этап 2).'));
+      case 'grants':
+        return grantsPanel(ctx);
+      case 'quests':
+        return questsPanel(ctx);
+      case 'collection':
+        return collectionPanel(ctx, this.colTab);
+      case 'settings':
+        return settingsPanel(ctx);
     }
-    this.panel.classList.remove('hidden');
-    this.refresh(true);
+  }
+
+  open(s: Sheet): void {
+    this.sheet = s;
+    this.rebuild();
+    this.sheetEl.classList.remove('hidden');
+    for (const [id, b] of this.navBtns) b.classList.toggle('active', s.kind === id);
+  }
+
+  toggle(s: Sheet): void {
+    if (this.sheet && this.sheet.kind === s.kind && s.kind !== 'room') this.close();
+    else this.open(s);
   }
 
   close(): void {
-    this.room = null;
-    this.panel.classList.add('hidden');
-    this.onClose();
+    if (!this.sheet) return;
+    this.sheet = null;
+    this.panel = null;
+    this.sheetEl.classList.add('hidden');
+    for (const [id, b] of this.navBtns) b.classList.toggle('active', id === 'office');
+    this.hd.onClose();
   }
 
-  /** Вызывается каждый кадр; DOM обновляем не чаще 6 раз в секунду. */
-  update(now: number): void {
-    if (now - this.lastRefresh < 160) return;
-    this.lastRefresh = now;
-    this.refresh(false);
+  rebuild(): void {
+    if (!this.sheet) return;
+    const scroll = this.sheetBody.scrollTop;
+    this.panel = this.build(this.sheet);
+    this.sheetTitle.textContent = this.panel.title;
+    this.sheetBody.replaceChildren(this.panel.body);
+    this.best = bestPurchase(this.game);
+    this.panel.refresh();
+    this.sheetSub.textContent = this.panel.sub?.() ?? '';
+    this.sheetBody.scrollTop = scroll;
   }
 
-  private buildRow(dept: number, desk: number): WorkerRow {
-    const row = el('div', 'worker');
-    const info = el('div', 'worker-info');
-    const name = el('div', 'worker-name', NAMES[dept][desk]);
-    const level = el('div', 'worker-level');
-    const income = el('div', 'worker-income');
-    const hint = el('div', 'worker-hint');
-    info.append(name, level, income, hint);
+  toast(text: string, kind: 'info' | 'good' = 'info'): void {
+    const el = h('div', { class: `toast ${kind}`, text });
+    this.toasts.append(el);
+    setTimeout(() => el.classList.add('out'), 2600);
+    setTimeout(() => el.remove(), 3000);
+  }
 
-    const button = el('button', 'buy');
-    const buttonLabel = el('span', 'buy-label');
-    const buttonCost = el('span', 'buy-cost');
-    button.append(buttonLabel, buttonCost);
-    button.addEventListener('click', () => {
-      const n = this.mode === 'max' ? this.game.maxLevels(dept, desk) : this.mode;
-      if (this.game.buyLevels(dept, desk, n)) this.refresh(true);
+  /** Окно «Пока вас не было». */
+  showOffline(seconds: number, amount: number, capH: number, onClaim: () => void): void {
+    const btn = h('button', { class: 'buy big', text: `${t('claim')} +${formatNumber(amount)}` });
+    const card = h(
+      'div',
+      { class: 'modal-card' },
+      h('h2', { text: t('offline.title') }),
+      h('p', { class: 'note', text: t('offline.text', { time: duration(seconds) }) }),
+      h('div', { class: 'stat-big' }, h('span', { class: 'coin-icon', text: 'tc' }), h('span', { text: formatNumber(amount) })),
+      btn,
+      h('p', { class: 'note small', text: t('offline.cap', { h: capH }) }),
+    );
+    btn.addEventListener('click', () => {
+      onClaim();
+      this.modal.classList.add('hidden');
+      this.modal.replaceChildren();
     });
-
-    row.append(info, button);
-    this.body.append(row);
-    return { desk, level, income, hint, button, buttonLabel, buttonCost };
+    this.modal.replaceChildren(card);
+    this.modal.classList.remove('hidden');
   }
 
-  private refresh(force: boolean): void {
-    this.coinsEl.textContent = formatNumber(this.game.state.coins);
-    this.rateEl.textContent = `+${formatNumber(this.game.incomePerSec())}/сек`;
-    if (!this.room || this.room.dept !== 0) return;
-    if (force) for (const [m, b] of this.modeButtons) b.classList.toggle('active', m === this.mode);
+  setEvent(text: string | null): void {
+    this.eventChip.textContent = text ?? '';
+    this.eventChip.style.display = text ? '' : 'none';
+  }
 
-    const d = 0;
-    for (const r of this.rows) {
-      const L = this.game.level(d, r.desk);
-      r.level.textContent = `Уровень ${L}`;
-      r.income.textContent = `+${formatNumber(this.game.payoutOf(d, r.desk))} за 10 сек`;
-      const m = nextMilestone(L);
-      r.hint.textContent = m ? `до ×2 дохода: ${m - L} ур.` : '';
+  /** Каждый кадр; DOM обновляем 5 раз в секунду. */
+  update(now: number): void {
+    const g = this.game;
+    // «Аврал» — каждый кадр, чтобы кольцо шло плавно
+    let pc = 0;
+    if (g.isAvral()) {
+      pc = g.avralLeft / 30;
+      this.avralLabel.textContent = `×3 ${Math.ceil(g.avralLeft)}`;
+    } else if (g.avralCooldown > 0) {
+      pc = 1 - g.avralCooldown / 150;
+      this.avralLabel.textContent = `${Math.ceil(g.avralCooldown)}`;
+    } else {
+      pc = 1;
+      this.avralLabel.textContent = t('avral');
+    }
+    this.avralBtn.style.setProperty('--p', `${(pc * 100).toFixed(1)}%`);
+    this.avralBtn.classList.toggle('ready', g.canAvral());
+    this.avralBtn.classList.toggle('active', g.isAvral());
 
-      let n = this.mode === 'max' ? this.game.maxLevels(d, r.desk) : this.mode;
-      const canAfford = n > 0 && this.game.costOf(d, r.desk, n) <= this.game.state.coins + 1e-9;
-      if (n === 0) n = 1; // в режиме «Макс» без денег показываем цену одного уровня
-      r.buttonLabel.textContent = `+${n} ур.`;
-      r.buttonCost.textContent = formatNumber(this.game.costOf(d, r.desk, n));
-      r.button.disabled = !canAfford;
+    if (now - this.last < 200) return;
+    this.last = now;
+    this.coins.textContent = formatNumber(g.run.coins);
+    this.rate.textContent = `+${formatNumber(g.incomePerSec())}${t('perSec')}`;
+    this.grantsChip.innerHTML = `${ICONS.star}<span>${formatNumber(g.state.grants)}</span>`;
+    this.grantsChip.classList.toggle('pulse', g.reorgIsGood());
+    const n = claimableCount(g);
+    this.questBadge.textContent = n ? String(n) : '';
+    this.questBadge.style.display = n ? '' : 'none';
+    if (this.panel) {
+      this.best = bestPurchase(g);
+      this.panel.refresh();
+      this.sheetSub.textContent = this.panel.sub?.() ?? '';
     }
   }
 }
