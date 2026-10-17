@@ -177,6 +177,7 @@ export class Hud {
   }
 
   bottomInset(): number {
+    if (this.hidden) return 210; // карточка обучения
     const navH = this.nav.offsetHeight || 64;
     return this.sheet ? this.sheetEl.offsetHeight + navH + 8 : navH + 90;
   }

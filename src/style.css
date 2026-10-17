@@ -84,6 +84,22 @@ button:disabled {
 
 svg {
   display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chip svg,
+.ach.got .ach-icon svg,
+.avral-icon svg {
+  fill: currentColor;
+}
+
+.chip svg {
+  stroke: var(--ink);
+  stroke-width: 2;
 }
 
 /* ---------- верхняя полоса ---------- */
@@ -1199,4 +1215,32 @@ body.avral #game::after {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* звёздочки грантов внутри кнопок и счётчиков */
+.buy.grants {
+  flex-direction: row;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.buy.grants svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.stat-big svg {
+  width: 34px;
+  height: 34px;
+  color: var(--violet);
+  fill: currentColor;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.stat-big small {
+  font-size: 13px;
+  color: var(--muted);
 }

@@ -297,6 +297,7 @@ interface Popup {
 
 interface LockView {
   root: Container;
+  badge: Container;
   price: Text;
 }
 
@@ -304,6 +305,8 @@ export class OfficeView {
   readonly container = new Container();
   private readonly bg = new Container();
   readonly world = new Container();
+  /** Подписи комнат и замки — поверх мебели соседних комнат. */
+  private readonly labels = new Container();
   private readonly top = new Container();
   private theme: Theme = THEMES.startup;
   private desks = new Map<string, DeskView>();
@@ -327,7 +330,7 @@ export class OfficeView {
     private readonly rng: () => number,
   ) {
     this.world.sortableChildren = true;
-    this.container.addChild(this.bg, this.world, this.top);
+    this.container.addChild(this.bg, this.world, this.labels, this.top);
     this.hireMarks.zIndex = -1e6;
     this.world.addChild(this.hireMarks);
     this.buildStatic();
@@ -372,6 +375,7 @@ export class OfficeView {
 
   private buildStatic(): void {
     for (const c of this.bg.removeChildren()) c.destroy({ children: true });
+    for (const c of this.labels.removeChildren()) c.destroy({ children: true });
     const th = this.theme;
     const f = floorBounds();
     const g = new Graphics();
@@ -518,8 +522,8 @@ export class OfficeView {
       style: { fill: '#ffffff', fontSize: 20, fontWeight: '800', fontFamily: 'Nunito, system-ui, sans-serif', stroke: { color: '#262338', width: 4 } },
     });
     label.anchor.set(0.5);
-    label.position.set(0, hh - 26);
-    c.addChild(label);
+    label.position.set(ctr.x, ctr.y + hh - 26);
+    this.labels.addChild(label);
 
     if (def.kind === 'dept') {
       const lockRoot = new Container();
@@ -535,9 +539,13 @@ export class OfficeView {
       });
       price.anchor.set(0.5);
       price.position.set(0, 20);
-      lockRoot.addChild(shadeG, lockG, price);
+      lockRoot.addChild(shadeG);
       c.addChild(lockRoot);
-      this.locks[def.dept!] = { root: lockRoot, price };
+      const badge = new Container();
+      badge.position.set(ctr.x, ctr.y);
+      badge.addChild(lockG, price);
+      this.labels.addChild(badge);
+      this.locks[def.dept!] = { root: lockRoot, badge, price };
     }
     return c;
   }
@@ -585,7 +593,7 @@ export class OfficeView {
         this.managers[d] = null;
       }
       const lock = this.locks[d];
-      if (lock) lock.root.visible = !this.game.isUnlocked(d);
+      if (lock) lock.root.visible = lock.badge.visible = !this.game.isUnlocked(d);
     }
     this.syncRest();
     this.syncDirectorDesk();
