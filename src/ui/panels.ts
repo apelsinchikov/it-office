@@ -333,9 +333,20 @@ export function grantsPanel(ctx: Ctx): Panel {
   const coTrait = h('div', { class: 'w-inc', text: t(`company.trait.${co.style}` as Key) });
   const coBar = h('div', { class: 'bar' }, h('i'));
   const coBtn = h('button', { class: 'buy' });
+  let coArmed = false;
   coBtn.addEventListener('click', () => {
-    if (g.isComplete()) ctx.onCompany();
-    else ctx.sfx('error');
+    if (!g.isComplete()) return ctx.sfx('error');
+    // переезд — крупное решение: второе нажатие подтверждает
+    if (!coArmed) {
+      coArmed = true;
+      coBtn.textContent = t('grants.confirm');
+      setTimeout(() => {
+        coArmed = false;
+      }, 3000);
+      return;
+    }
+    coArmed = false;
+    ctx.onCompany();
   });
   body.append(
     h('div', { class: 'card col' }, wallet, pending, earned, hint, reorg, h('p', { class: 'note small', text: t('grants.reorgWhat') })),
@@ -400,7 +411,9 @@ export function grantsPanel(ctx: Ctx): Panel {
       reorg.disabled = !g.canReorg();
       const pc = g.completion();
       (coBar.firstChild as HTMLElement).style.width = `${(pc * 100).toFixed(1)}%`;
-      if (g.isComplete()) {
+      if (coArmed) {
+        // ждём второго нажатия
+      } else if (g.isComplete()) {
         coBtn.textContent = t('grants.companyGo', { name: t(`company.${nextCo.style}` as Key) });
         coBtn.disabled = false;
       } else {

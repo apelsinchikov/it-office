@@ -249,14 +249,20 @@ async function start(): Promise<void> {
     }
   }, 1000);
 
+  let frameErrors = 0;
   app.ticker.add((ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 1);
-    if (document.visibilityState !== 'hidden') game.tick(dt, !tutorial.active);
-    office.update(dt, game.isAvral() ? 2.5 : 1);
-    camera.update(dt);
-    fx.update(dt);
-    hud.update(performance.now());
-    document.body.classList.toggle('avral', game.isAvral());
+    // ошибка в одном кадре не должна останавливать игру целиком
+    try {
+      if (document.visibilityState !== 'hidden') game.tick(dt, !tutorial.active);
+      office.update(dt, game.isAvral() ? 2.5 : 1);
+      camera.update(dt);
+      fx.update(dt);
+      hud.update(performance.now());
+      document.body.classList.toggle('avral', game.isAvral());
+    } catch (err) {
+      if (frameErrors++ < 5) console.error(err);
+    }
   });
 }
 
