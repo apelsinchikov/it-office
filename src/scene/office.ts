@@ -90,7 +90,8 @@ class DeskView {
     readonly k: number,
     rng: () => number,
   ) {
-    this.look = randomLook(rng, OUTFIT_OF[d]);
+    // внешность постоянная: одна и та же для этого места в этой компании
+    this.look = randomLook(seeded(game.state.company * 1009 + d * 31 + k * 7 + 1), OUTFIT_OF[d]);
     const slot = DESK_SLOTS[k];
     const w = roomWorld(deptRoom(d), slot.u, slot.v);
     this.root.position.set(w.x, w.y);
@@ -228,6 +229,8 @@ class RoomWalker {
     private readonly rng: () => number,
     private readonly pauseMin = 2,
     private readonly pauseMax = 5,
+    /** Точки идут цепочкой: ходить только к соседней (чтобы не проходить сквозь столы). */
+    private readonly chain = false,
   ) {
     this.char = new Character(look, rng);
     this.char.root.scale.set(CHAR_SCALE);
@@ -261,9 +264,17 @@ class RoomWalker {
       this.wait -= dt;
       this.char.mode = this.talking ? 'talk' : 'idle';
       if (this.wait <= 0) {
-        let next = Math.floor(this.rng() * this.targets.length);
-        if (next === this.idx) next = (next + 1) % this.targets.length;
-        this.idx = next;
+        const n = this.targets.length;
+        let next: number;
+        if (this.chain) {
+          next = this.idx + (this.rng() < 0.5 ? -1 : 1);
+          if (next < 0) next = 1;
+          if (next >= n) next = n - 2;
+        } else {
+          next = Math.floor(this.rng() * n);
+          if (next === this.idx) next = (next + 1) % n;
+        }
+        this.idx = Math.max(0, Math.min(n - 1, next));
       }
     } else if (this.talking) {
       this.char.mode = 'talk';
@@ -583,9 +594,10 @@ export class OfficeView {
       const has = this.game.run.managers[d];
       if (has && !this.managers[d]) {
         const def = deptRoom(d);
-        const pts = [0.15, 0.5, 0.85].flatMap((u) => [roomWorld(def, u, 0.56), roomWorld(def, u, 0.92)]);
-        const look = randomLook(this.rng, 'manager');
-        const m = new RoomWalker(look, pts, this.rng);
+        // ходит по проходу между рядами столов
+        const pts = [0.27, 0.4, 0.53, 0.66, 0.79].map((u) => roomWorld(def, u, 1.06 - u));
+        const look = randomLook(seeded(this.game.state.company * 1009 + d * 31 + 500), 'manager');
+        const m = new RoomWalker(look, pts, this.rng, 2, 5, true);
         this.world.addChild(m.char.root);
         this.managers[d] = m;
       } else if (!has && this.managers[d]) {
@@ -873,6 +885,16 @@ export class OfficeView {
   get companyName(): string {
     return t(`company.${companyDef(this.game.state.company).style}` as Key);
   }
+}
+
+function seeded(seed: number): () => number {
+  let x = seed >>> 0;
+  return () => {
+    x = (x + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(x ^ (x >>> 15), 1 | x);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function isoW(a: number, b: number): Pt {
