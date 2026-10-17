@@ -135,7 +135,9 @@ export class Fx {
 
   update(dt: number): void {
     this.time += dt;
-    if (this.enabled) this.tryStart();
+    // издалека фразы закрыли бы весь офис — показываем их только вблизи
+    const near = this.scale() >= 0.45;
+    if (this.enabled && near) this.tryStart();
     else if (this.bubbles.length) this.clearBubbles();
 
     for (let i = this.bubbles.length - 1; i >= 0; i--) {

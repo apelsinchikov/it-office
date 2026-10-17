@@ -125,6 +125,12 @@ export class Camera {
     const maxY = s.height / 2 - b.y * k;
     this.target.x = Math.min(maxX, Math.max(minX, this.target.x));
     this.target.y = Math.min(maxY, Math.max(minY, this.target.y));
+    // офис целиком влезает по ширине — держим его по центру, а не у края
+    if (b.width * k <= s.width) this.target.x = s.width / 2 - (b.x + b.width / 2) * k;
+    if (b.height * k <= s.height - this.insets().top - this.insets().bottom) {
+      const ins = this.insets();
+      this.target.y = ins.top + (s.height - ins.top - ins.bottom) / 2 - (b.y + b.height / 2) * k;
+    }
   }
 
   private toWorld(p: Pt): Pt {

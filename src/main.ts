@@ -178,6 +178,9 @@ async function start(): Promise<void> {
   window.addEventListener('pointerdown', unlockAudio, { capture: true });
   app.renderer.on('resize', () => camera.onResize());
 
+  // ?debug — доступ к игре из консоли для проверки
+  if (location.search.includes('debug')) Object.assign(window, { __game: game, __hud: hud, __office: office, __focus: focusRoom });
+
   // офлайн-доход
   const offerOffline = (sec: number): void => {
     if (sec < OFFLINE_MIN_SEC) return;
