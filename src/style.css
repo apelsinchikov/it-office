@@ -1244,3 +1244,8 @@ body.avral #game::after {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* фразу подняли над тикетом — хвостик уже не указывает на говорящего */
+.bubble.lifted::after {
+  display: none;
+}

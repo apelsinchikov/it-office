@@ -150,24 +150,46 @@ export class Fx {
         setTimeout(() => el.remove(), 300);
         this.bubbles.splice(i, 1);
         this.roomNext.set(b.room, this.time + PAUSE);
-        continue;
       }
-      const p = this.toScreen(b.speaker.anchor());
-      const bw = b.el.offsetWidth || 120;
-      let x = p.x - bw / 2;
-      const rb = this.roomBoundsX(b.room);
-      if (rb) x = Math.max(Math.min(x, rb[1] - bw), rb[0]);
-      x = Math.max(6, Math.min(window.innerWidth - bw - 6, x));
-      b.el.style.transform = `translate(${x.toFixed(1)}px, ${(p.y - b.el.offsetHeight - 6).toFixed(1)}px)`;
-      b.el.style.setProperty('--tail', `${Math.max(10, Math.min(bw - 10, p.x - x)).toFixed(0)}px`);
     }
 
+    // сначала тикеты: они важнее, фразы их обходят
+    type Box = { x: number; y: number; w: number; h: number };
+    const taken: Box[] = [];
+    const hit = (a: Box, c: Box): boolean => a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h;
     const s = Math.max(0.6, Math.min(1.2, this.scale() * 1.6));
     for (const t of this.tickets.values()) {
       const a = this.office.ticketAnchor(t.d, t.k);
       if (!a) continue;
       const p = this.toScreen(a);
       t.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%) scale(${s.toFixed(2)})`;
+      const w = (t.el.offsetWidth || 150) * s;
+      const h = (t.el.offsetHeight || 36) * s;
+      taken.push({ x: p.x - w / 2 - 4, y: p.y - h - 4, w: w + 8, h: h + 8 });
+    }
+
+    // фразы: старшие ставим первыми, новые поднимаем над занятым местом
+    for (const b of this.bubbles) {
+      const p = this.toScreen(b.speaker.anchor());
+      const bw = b.el.offsetWidth || 120;
+      const bh = b.el.offsetHeight || 40;
+      let x = p.x - bw / 2;
+      const rb = this.roomBoundsX(b.room);
+      if (rb) x = Math.max(Math.min(x, rb[1] - bw), rb[0]);
+      x = Math.max(6, Math.min(window.innerWidth - bw - 6, x));
+      const box: Box = { x, y: p.y - bh - 6, w: bw, h: bh + 4 };
+      for (let k = 0; k < 4; k++) {
+        const o = taken.find((c) => hit(box, c));
+        if (!o) break;
+        box.y = o.y - box.h - 2;
+      }
+      const shifted = box.y < p.y - bh - 7;
+      const blocked = box.y < 76 || taken.some((c) => hit(box, c));
+      b.el.style.opacity = blocked ? '0' : '';
+      b.el.classList.toggle('lifted', shifted);
+      if (!blocked) taken.push(box);
+      b.el.style.transform = `translate(${x.toFixed(1)}px, ${box.y.toFixed(1)}px)`;
+      b.el.style.setProperty('--tail', `${Math.max(10, Math.min(bw - 10, p.x - x)).toFixed(0)}px`);
     }
 
     const marks = this.office.walkerMarks();
