@@ -42,6 +42,12 @@ export class NavGrid {
     return [i, j];
   }
 
+  /** Можно ли стоять в этой точке мира. */
+  freeAt(p: Pt): boolean {
+    const [i, j] = this.cellOf(p);
+    return this.isOpen(i, j);
+  }
+
   isOpen(i: number, j: number): boolean {
     return i >= 0 && j >= 0 && i < this.n && j < this.n && this.open[i * this.n + j] === 1;
   }
@@ -150,6 +156,12 @@ export interface SpeakerInfo {
 
 type WalkerKind = 'coffee' | 'gamer' | 'roamer';
 
+/** Личное пространство: ближе друг к другу прохожие не подходят (в изометрии y сжат вдвое). */
+const PERSONAL = 26;
+/** Сколько секунд ждать, если обойти не получается; потом — идти в другое место. */
+const GIVE_UP = 1.2;
+const near = (a: Pt, b: Pt, r: number): boolean => Math.hypot(a.x - b.x, (a.y - b.y) * 2) < r;
+
 const OUTFITS: Outfit[] = ['support', 'dev', 'qa', 'analyst', 'sysadmin'];
 
 export class Walker {
@@ -167,6 +179,9 @@ export class Walker {
   private markLeft = 0;
   hidden = false;
   readonly speed: number;
+  /** Куда идёт сейчас (чтобы двое не выбирали одну точку). */
+  target: Pt | null = null;
+  private blockedFor = 0;
 
   constructor(
     readonly kind: WalkerKind,
@@ -220,6 +235,8 @@ export class Walker {
   private goTo(target: Pt): void {
     this.path = this.world.nav.path(this.pos, target);
     this.lastTarget = target;
+    this.target = target;
+    this.blockedFor = 0;
     this.pauseAt = this.rng() < 0.2 ? Math.floor(this.rng() * this.path.length) : -1;
   }
 
@@ -251,10 +268,12 @@ export class Walker {
       }
     }
     const edge = this.rng() < 0.3;
+    // не та же и не соседняя точка; и не туда, куда уже идёт или где стоит кто-то другой
+    const bad = (t: Pt): boolean =>
+      (!!this.lastTarget && Math.hypot(t.x - this.lastTarget.x, t.y - this.lastTarget.y) < 80) ||
+      this.world.walkers.some((o) => o !== this && !o.hidden && (near(o.pos, t, PERSONAL * 2) || (!!o.target && near(o.target, t, PERSONAL * 2))));
     let target = this.world.nav.randomCell(this.rng, edge);
-    // не та же и не соседняя точка
-    for (let k = 0; k < 6 && this.lastTarget && Math.hypot(target.x - this.lastTarget.x, target.y - this.lastTarget.y) < 80; k++)
-      target = this.world.nav.randomCell(this.rng, edge);
+    for (let k = 0; k < 10 && bad(target); k++) target = this.world.nav.randomCell(this.rng, edge);
     this.atEdge = edge;
     this.goTo(target);
   }
@@ -291,12 +310,22 @@ export class Walker {
       }
     } else if (this.atEdge) {
       // у края: удивляется, иногда долго смотрит в окно
-      this.wait = this.rng() < 0.25 ? 5 + this.rng() * 2 : 2 + this.rng();
+      this.wait = this.rng() < 0.25 ? 5 + this.rng() * 2 : 3.5 + this.rng();
       this.mark = this.rng() < 0.5 ? '?' : '!';
       this.markLeft = 1.6;
+      this.world.edge(this);
     } else {
       this.wait = 1 + this.rng() * 3;
     }
+  }
+
+  /** Точка занята кем-то другим (и мы к нему приближаемся, а не уходим). */
+  private crowded(p: Pt): boolean {
+    for (const o of this.world.walkers) {
+      if (o === this || o.hidden) continue;
+      if (near(o.pos, p, PERSONAL) && Math.hypot(o.pos.x - p.x, (o.pos.y - p.y) * 2) < Math.hypot(o.pos.x - this.pos.x, (o.pos.y - this.pos.y) * 2)) return true;
+    }
+    return false;
   }
 
   update(dt: number): void {
@@ -321,7 +350,27 @@ export class Walker {
         const step = this.speed * dt;
         this.char.mode = 'walk';
         if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) this.char.setDir(dx >= 0 ? (dy >= 0 ? 0 : 2) : dy >= 0 ? 1 : 3);
-        if (d <= step) {
+        const next = d <= step ? t : { x: this.pos.x + (dx / d) * step, y: this.pos.y + (dy / d) * step };
+        if (this.crowded(next)) {
+          // впереди человек: обходим справа, потом слева; не вышло — ждём, а потом идём в другое место
+          const ux = dx / (d || 1);
+          const uy = dy / (d || 1);
+          let moved = false;
+          for (const side of [1, -1]) {
+            const c = { x: this.pos.x + (ux * 0.3 - uy * side) * step, y: this.pos.y + (uy * 0.3 + ux * side) * step * 0.5 };
+            if (this.world.nav.freeAt(c) && !this.crowded(c)) {
+              this.pos = c;
+              moved = true;
+              break;
+            }
+          }
+          if (!moved) {
+            this.char.mode = 'idle';
+            this.blockedFor += dt;
+            if (this.blockedFor > GIVE_UP) this.chooseNext();
+          }
+        } else if (d <= step) {
+          this.blockedFor = 0;
           this.pos = { ...t };
           this.path.shift();
           if (this.pauseAt > 0) this.pauseAt--;
@@ -330,8 +379,8 @@ export class Walker {
             this.arrive();
           }
         } else {
-          this.pos.x += (dx / d) * step;
-          this.pos.y += (dy / d) * step;
+          this.blockedFor = 0;
+          this.pos = next;
         }
       }
     } else {
@@ -356,6 +405,8 @@ export class WalkerWorld {
   readonly slots: Slot[] = [];
   readonly walkers: Walker[] = [];
   onToilet: (busy: boolean) => void = () => {};
+  /** Прохожий упёрся в стену этажа — пусть что-нибудь скажет. */
+  onEdge: (w: Walker) => void = () => {};
 
   constructor(
     readonly layer: Container,
@@ -392,6 +443,10 @@ export class WalkerWorld {
 
   toilet(busy: boolean): void {
     this.onToilet(busy);
+  }
+
+  edge(w: Walker): void {
+    this.onEdge(w);
   }
 
   roomName(p: Pt): string {

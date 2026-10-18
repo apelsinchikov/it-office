@@ -184,6 +184,9 @@ export const PHRASES: Record<PhraseGroup, Phrase[]> = {
     p('Кажется, я заблудился.', "I think I'm lost."),
     p('Тут раньше был кабинет?', 'Was there an office here before?'),
     p('Окно открывается? Нет.', 'Does the window open? No.'),
+    p('А разве тут не было прохода?', "Wasn't there a way through here?"),
+    p('Я забыл, куда шёл.', 'I forgot where I was going.'),
+    p('Хорошее место, чтобы поплакать.', 'Nice spot for a little cry.'),
   ],
   bonus: [
     p('Кто поставил митинг на 18:00?', 'Who scheduled a meeting at 6 PM?'),

@@ -13,6 +13,7 @@ const SHOW = 10;
 const PAUSE = 10;
 const MAX_VISIBLE = 3;
 const STAGGER = 3;
+const EDGE_SHOW = 3.5;
 
 interface Bubble {
   el: HTMLDivElement;
@@ -94,6 +95,24 @@ export class Fx {
     }
     if (!pool.length) return null;
     return pool[Math.floor(this.rng() * pool.length)];
+  }
+
+  /** Сказать сразу, без очереди (прохожий упёрся в стену этажа). Короче обычной реплики. */
+  sayNow(speakerId: string, group: PhraseGroup): void {
+    if (!this.enabled || this.scale() < 0.45 || this.bubbles.length > MAX_VISIBLE) return;
+    if (this.bubbles.some((b) => b.speaker.id === speakerId)) return;
+    const s = this.office.speakers().find((x) => x.id === speakerId);
+    if (!s) return;
+    const p = this.toScreen(s.anchor());
+    if (p.x < 20 || p.x > window.innerWidth - 20 || p.y < topLimit() + 20 || p.y > window.innerHeight - 80) return;
+    const ph = this.pickPhrase([group]);
+    if (!ph) return;
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    el.textContent = ph.text;
+    this.root.appendChild(el);
+    this.bubbles.push({ el, speaker: s, room: `edge:${speakerId}`, left: EDGE_SHOW });
+    this.onPhrase(ph.id);
   }
 
   private tryStart(): void {

@@ -333,6 +333,8 @@ export class OfficeView {
   private popups: Popup[] = [];
   private snow: Graphics[] = [];
   private hallDecor = new Container();
+  /** Прохожий дошёл до стены этажа: id говорящего для пузыря. */
+  onWalkerEdge: (speakerId: string) => void = () => {};
   private time = 0;
   private eventId: string | null = null;
 
@@ -347,6 +349,7 @@ export class OfficeView {
     this.buildStatic();
     this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng);
     this.walkers.onToilet = (busy) => this.setToilet(busy);
+    this.walkers.onEdge = (w) => this.onWalkerEdge(`walker${this.walkers.walkers.indexOf(w)}`);
     this.syncAll();
     game.on((e) => this.onGameEvent(e));
   }

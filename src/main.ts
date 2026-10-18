@@ -137,6 +137,7 @@ async function start(): Promise<void> {
     office.bigPopup(d, k, reward);
     play('ticket');
   };
+  office.onWalkerEdge = (id) => fx.sayNow(id, 'edge');
   fx.onPhrase = (id) => {
     if (!game.state.phrasesSeen.includes(id)) game.state.phrasesSeen.push(id);
   };
