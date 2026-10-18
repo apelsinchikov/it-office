@@ -44,7 +44,12 @@ export interface HudHandlers {
 }
 
 export class Hud {
-  readonly topInset = 70;
+  /** Сколько пикселей сверху занято: кнопки Telegram + наша верхняя полоса. */
+  get topInset(): number {
+    const b = this.topEl?.getBoundingClientRect().bottom;
+    return b && b > 0 ? b + 6 : 70;
+  }
+  private topEl: HTMLElement | null = null;
   private readonly root: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly rate: HTMLElement;
@@ -131,6 +136,7 @@ export class Hud {
 
     this.toasts = h('div', { class: 'toasts', attrs: { 'aria-live': 'polite' } });
     this.modal = h('div', { class: 'modal hidden' });
+    this.topEl = top;
     root.append(top, this.toasts, this.avralBtn, this.sheetEl, this.nav, this.modal);
 
     this.ctx = {

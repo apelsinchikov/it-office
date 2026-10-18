@@ -21,6 +21,10 @@ interface TgWebApp {
   isVersionAtLeast?(version: string): boolean;
   setHeaderColor?(color: string): void;
   setBackgroundColor?(color: string): void;
+  setBottomBarColor?(color: string): void;
+  requestFullscreen?(): void;
+  isFullscreen?: boolean;
+  onEvent?(event: string, cb: () => void): void;
 }
 
 declare global {
@@ -35,6 +39,13 @@ export interface TelegramInfo {
   /** Строка для проверки на сервере (Edge Function). Пустая вне Telegram. */
   initData: string;
   platform: string;
+}
+
+/** Telegram сменил полный экран или отступы под свои кнопки — пересчитать раскладку. */
+export function onTelegramLayout(cb: () => void): void {
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.onEvent) return;
+  for (const ev of ['fullscreenChanged', 'safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']) tg.onEvent(ev, cb);
 }
 
 export function initTelegram(): TelegramInfo {
@@ -56,6 +67,11 @@ export function initTelegram(): TelegramInfo {
       tg.setHeaderColor?.('#262338');
       tg.setBackgroundColor?.('#262338');
     }
+    if (tg.isVersionAtLeast?.('7.10')) tg.setBottomBarColor?.('#262338');
+    // Во весь экран, как у Portals: шапка Telegram пропадает, остаются его кнопки поверх игры (Bot API 8.0+).
+    // На компьютере полный экран не нужен — там Mini App открывается окном.
+    const mobile = tg.platform === 'ios' || tg.platform === 'android';
+    if (mobile && tg.isVersionAtLeast?.('8.0') && !tg.isFullscreen) tg.requestFullscreen?.();
   } catch {
     // старый клиент
   }

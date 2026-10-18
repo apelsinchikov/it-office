@@ -105,7 +105,7 @@ export class Fx {
     const cands = speakers.filter((s) => {
       if (busy.has(s.room) || (this.roomNext.get(s.room) ?? 0) > this.time) return false;
       const p = this.toScreen(s.anchor());
-      return p.x > 20 && p.x < w - 20 && p.y > 90 && p.y < h - 80;
+      return p.x > 20 && p.x < w - 20 && p.y > topLimit() + 20 && p.y < h - 80;
     });
     if (!cands.length) return;
     const s = cands[Math.floor(this.rng() * cands.length)];
@@ -184,7 +184,7 @@ export class Fx {
         box.y = o.y - box.h - 2;
       }
       const shifted = box.y < p.y - bh - 7;
-      const blocked = box.y < 76 || taken.some((c) => hit(box, c));
+      const blocked = box.y < topLimit() || taken.some((c) => hit(box, c));
       b.el.style.opacity = blocked ? '0' : '';
       b.el.classList.toggle('lifted', shifted);
       if (!blocked) taken.push(box);
@@ -211,4 +211,10 @@ export class Fx {
       m.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
     });
   }
+}
+
+/** Нижний край верхней полосы: выше фразы не показываем. */
+function topLimit(): number {
+  const b = document.querySelector('.topbar')?.getBoundingClientRect().bottom;
+  return b && b > 0 ? b + 4 : 76;
 }

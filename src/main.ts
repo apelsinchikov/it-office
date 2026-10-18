@@ -11,7 +11,7 @@ import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
-import { initTelegram } from './telegram';
+import { initTelegram, onTelegramLayout } from './telegram';
 import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
 import { Tutorial } from './ui/tutorial';
@@ -177,6 +177,8 @@ async function start(): Promise<void> {
   };
   window.addEventListener('pointerdown', unlockAudio, { capture: true });
   app.renderer.on('resize', () => camera.onResize());
+  // кнопки Telegram сверху появляются чуть позже запуска — подвинуть камеру под новые отступы
+  onTelegramLayout(() => requestAnimationFrame(() => camera.onResize()));
 
   // ?debug — доступ к игре из консоли для проверки
   if (location.search.includes('debug')) Object.assign(window, { __game: game, __hud: hud, __office: office, __focus: focusRoom });
