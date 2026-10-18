@@ -159,6 +159,7 @@ const D = {
   'col.phrases': ['Фразы', 'Phrases'],
   'col.heard': ['Услышано {n} из {total}', 'Heard {n} of {total}'],
   'col.unknown': ['??? ещё не звучала', '??? not heard yet'],
+  'col.unknownRare': ['??? редкая, ещё не звучала', '??? rare, not heard yet'],
   // настройки
   'set.sound': ['Звук', 'Sound'],
   'set.lang': ['Язык', 'Language'],

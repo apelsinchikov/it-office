@@ -1251,3 +1251,11 @@ body.avral #game::after {
 .bubble.lifted::after {
   display: none;
 }
+
+.phr-line.rare {
+  color: var(--violet-d);
+}
+
+.phr-line.rare.unknown {
+  color: #b9a8f0;
+}

@@ -1,7 +1,7 @@
 // Достижения (роадмап 1.1): только значки, без влияния на экономику.
 
 import type { GameState } from './state';
-import { TOTAL_PHRASES } from './phrases';
+import { TOTAL_PHRASES, phraseById } from './phrases';
 import type { Text } from './quests';
 
 export interface AchievementDef {
@@ -29,8 +29,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'reorg1', title: t('Реорганизатор', 'Reorganizer'), check: (s) => s.reorgs >= 1 },
   { id: 'reorg10', title: t('Вечная реструктуризация', 'Eternal restructuring'), check: (s) => s.reorgs >= 10 },
   { id: 'reorg25', title: t('Оптимизатор штата', 'Headcount optimizer'), check: (s) => s.reorgs >= 25 },
-  { id: 'phrases25', title: t('Слушатель', 'Listener'), check: (s) => s.phrasesSeen.length >= 25 },
-  { id: 'phrases100', title: t('Знаток офисного фольклора', 'Office folklore expert'), check: (s) => s.phrasesSeen.length >= 100 },
+  // фраз 365, из них 28 редких и часть — только в праздники и в других офисах
+  { id: 'phrases25', title: t('Слушатель', 'Listener'), check: (s) => s.phrasesSeen.length >= 50 },
+  { id: 'phrases100', title: t('Знаток офисного фольклора', 'Office folklore expert'), check: (s) => s.phrasesSeen.length >= 150 },
+  { id: 'phrases300', title: t('Ходячая курилка', 'Walking water cooler'), check: (s) => s.phrasesSeen.length >= 300 },
+  { id: 'phrasesRare', title: t('Редкий экземпляр', 'Rare specimen'), check: (s) => s.phrasesSeen.filter((id) => phraseById(id)?.rare).length >= 15 },
   { id: 'phrasesAll', title: t('Слышал всё', 'Heard it all'), check: (s) => s.phrasesSeen.length >= TOTAL_PHRASES },
   { id: 'company2', title: t('Новая компания', 'New company'), check: (s) => s.company >= 2 },
   { id: 'company3', title: t('Серийный директор', 'Serial director'), check: (s) => s.company >= 3 },

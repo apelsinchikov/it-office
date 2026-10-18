@@ -85,16 +85,51 @@ export class Fx {
     this.bubbles = [];
   }
 
+  /** Недавно сказанное по группам: пока группа не пройдена на ~70%, фраза не повторяется. */
+  private recent = new Map<PhraseGroup, string[]>();
+
   private pickPhrase(groups: PhraseGroup[]): { id: string; text: string } | null {
-    const pool: { id: string; text: string }[] = [];
+    type C = { id: string; text: string; g: PhraseGroup; w: number };
+    const all: C[] = [];
     const lang = getLang();
+    const onScreen = new Set(this.bubbles.map((b) => b.el.textContent));
     for (const g of groups) {
       const list = PHRASES[g];
       const n = g === 'bonus' ? Math.min(list.length, this.game.state.bonusPhrases) : list.length;
-      for (let i = 0; i < n; i++) pool.push({ id: phraseId(g, i), text: list[i][lang] });
+      for (let i = 0; i < n; i++) {
+        const ph = list[i];
+        // редкие выпадают в десять раз реже
+        all.push({ id: phraseId(g, i), text: ph[lang], g, w: ph.rare ? 0.1 : 1 });
+      }
     }
-    if (!pool.length) return null;
-    return pool[Math.floor(this.rng() * pool.length)];
+    if (!all.length) return null;
+    const fresh = all.filter((c) => !onScreen.has(c.text) && !(this.recent.get(c.g) ?? []).includes(c.id));
+    let pool = fresh;
+    if (!pool.length) {
+      // всё недавно звучало: берём то, что звучало раньше всего
+      const age = (c: C): number => {
+        const r = this.recent.get(c.g) ?? [];
+        const k = r.indexOf(c.id);
+        return k < 0 ? -1 : k;
+      };
+      const min = Math.min(...all.map(age));
+      pool = all.filter((c) => age(c) === min);
+    }
+    let x = this.rng() * pool.reduce((s, c) => s + c.w, 0);
+    let pick = pool[pool.length - 1];
+    for (const c of pool) {
+      x -= c.w;
+      if (x <= 0) {
+        pick = c;
+        break;
+      }
+    }
+    const r = this.recent.get(pick.g) ?? [];
+    r.push(pick.id);
+    const keep = Math.max(1, Math.floor(PHRASES[pick.g].length * 0.7));
+    while (r.length > keep) r.shift();
+    this.recent.set(pick.g, r);
+    return { id: pick.id, text: pick.text };
   }
 
   /** Сказать сразу, без очереди (прохожий упёрся в стену этажа). Короче обычной реплики. */

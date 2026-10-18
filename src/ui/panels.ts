@@ -573,7 +573,9 @@ export function collectionPanel(ctx: Ctx, tab: { v: 'ach' | 'phr' }): Panel {
       const det = h('details', { class: 'phr' });
       det.append(h('summary', { text: `${t(GROUP_TITLE[grp])}${lead} — ${heard.length}/${list.length}` }));
       list.forEach((p, i) => {
-        det.append(h('p', { class: seen.has(phraseId(grp, i)) ? 'phr-line' : 'phr-line unknown', text: seen.has(phraseId(grp, i)) ? `«${p[getLang()]}»` : t('col.unknown') }));
+        const heardIt = seen.has(phraseId(grp, i));
+        const star = p.rare ? '★ ' : '';
+        det.append(h('p', { class: (heardIt ? 'phr-line' : 'phr-line unknown') + (p.rare ? ' rare' : ''), text: heardIt ? `${star}«${p[getLang()]}»` : star + t(p.rare ? 'col.unknownRare' : 'col.unknown') }));
       });
       body.append(det);
     }
