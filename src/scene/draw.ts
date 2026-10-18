@@ -115,3 +115,18 @@ export function shade(color: number, k: number): number {
   const f = (c: number): number => Math.round(k >= 0 ? c + (255 - c) * k : c * (1 + k));
   return (f(r) << 16) | (f(g) << 8) | f(b);
 }
+
+/**
+ * Коробка в виде «3/4 спереди»: видны передняя грань и крышка.
+ * cx — центр по x, by — нижний край передней грани (пол), w — ширина, h — высота, d — глубина крышки на экране.
+ */
+export function fbox(g: Graphics, cx: number, by: number, w: number, h: number, d: number, front: number, top: number, lw = 3): Graphics {
+  rect(g, cx - w / 2, by - h - d, w, d, 0, { fill: top, line: lw });
+  rect(g, cx - w / 2, by - h, w, h, 0, { fill: front, line: lw });
+  return g;
+}
+
+/** Мягкая тень на полу. */
+export function shadow(g: Graphics, cx: number, cy: number, rx: number, ry: number, alpha = 0.14): Graphics {
+  return ellipse(g, cx, cy, rx, ry, { fill: OUT, alpha, line: 0 });
+}
