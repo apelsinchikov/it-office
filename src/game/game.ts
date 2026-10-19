@@ -4,6 +4,13 @@
 import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, SEQUENCE, SHOP, companyDef, shopItem, stepIndex, type CompanyDef, type RoomId, type Step } from './config';
 import { perkPower, tickPerks } from './director';
 import {
+  DIR_SINGLES,
+  DIR_SINGLE_BONUS,
+  DIR_SINGLE_COST,
+  DIR_TIER_BONUS,
+  DIR_TIER_COST,
+  type DirItem,
+  type DirSingle,
   AVRAL_COOLDOWN,
   AVRAL_MULT,
   AVRAL_SEC,
@@ -72,6 +79,7 @@ export type GameEvent =
   | { type: 'room'; id: RoomId }
   | { type: 'manager'; dept: number }
   | { type: 'furn'; dept: number; desk: number }
+  | { type: 'dirFurn' }
   | { type: 'rest'; kind: RestKind }
   | { type: 'ticketSpawn'; ticket: Ticket }
   | { type: 'ticketGone'; id: number; collected: boolean; reward: number }
@@ -454,6 +462,52 @@ export class Game {
 
   roomUnlockAvailable(id: RoomId): boolean {
     return !this.run.rooms[id] && this.prevOpen({ kind: 'room', id });
+  }
+
+  // ---------- кабинет директора ----------
+
+  /** Уровень предмета кабинета директора (стол из обучения — не ниже 1). */
+  dirTier(item: DirItem): number {
+    const t = this.run.dir[item];
+    return item === 'desk' && this.state.directorDesk > 0 ? Math.max(1, t) : t;
+  }
+
+  dirCost(item: DirItem): number {
+    const t = this.dirTier(item);
+    return t >= 3 ? Infinity : roomUnlockCost('director') * DIR_TIER_COST[t] * this.furnCostMult();
+  }
+
+  buyDir(item: DirItem): boolean {
+    if (!this.roomOpen('director') || this.dirTier(item) >= 3) return false;
+    if (!this.pay(this.dirCost(item))) return false;
+    this.run.dir[item] = this.dirTier(item) + 1;
+    this.state.stats.furnBought++;
+    this.emit({ type: 'dirFurn' });
+    return true;
+  }
+
+  dirSingleCost(id: DirSingle): number {
+    return this.run.dir[id] ? Infinity : roomUnlockCost('director') * DIR_SINGLE_COST[id] * this.furnCostMult();
+  }
+
+  buyDirSingle(id: DirSingle): boolean {
+    if (!this.roomOpen('director') || this.run.dir[id]) return false;
+    if (!this.pay(this.dirSingleCost(id))) return false;
+    this.run.dir[id] = true;
+    this.state.stats.furnBought++;
+    this.emit({ type: 'dirFurn' });
+    return true;
+  }
+
+  /** Насколько обстановка кабинета увеличивает награды за задания директора (0.4 = +40%). */
+  dirBonus(): number {
+    let b = 0;
+    for (const item of ['desk', 'chair', 'monitor', 'keyboard'] as DirItem[]) {
+      const t = this.run.dir[item]; // бесплатный стол из обучения бонуса не даёт
+      for (let i = 0; i < t; i++) b += DIR_TIER_BONUS[i];
+    }
+    for (const id of DIR_SINGLES) if (this.run.dir[id]) b += DIR_SINGLE_BONUS;
+    return b;
   }
 
   roomCost(id: RoomId): number {

@@ -51,6 +51,22 @@ export interface RunState {
   rest: { coffee: number; fridge: number; games: number };
   /** Открыты ли кабинет директора, зона отдыха и туалет. */
   rooms: { director: boolean; rest: boolean; toilet: boolean };
+  /** Кабинет директора: уровни стола, стула, монитора, клавиатуры (0..3) и украшения. */
+  dir: DirFurn;
+}
+
+export interface DirFurn {
+  desk: number;
+  chair: number;
+  monitor: number;
+  keyboard: number;
+  flower: boolean;
+  picture: boolean;
+  carpet: boolean;
+}
+
+export function newDirFurn(): DirFurn {
+  return { desk: 0, chair: 0, monitor: 0, keyboard: 0, flower: false, picture: false, carpet: false };
 }
 
 export interface GameState {
@@ -98,6 +114,7 @@ export function newRun(startCoins = 0): RunState {
     singles: DEPTS.map((def) => Array.from({ length: DESKS }, () => def.singles.map(() => false))),
     rest: { coffee: 0, fridge: 0, games: 0 },
     rooms: { director: false, rest: false, toilet: false },
+    dir: newDirFurn(),
   };
 }
 
@@ -182,6 +199,15 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
       director: Boolean(run.rooms?.director),
       rest: Boolean(run.rooms?.rest),
       toilet: Boolean(run.rooms?.toilet),
+    },
+    dir: {
+      desk: Math.min(3, Math.max(0, Math.floor(num(run.dir?.desk)))),
+      chair: Math.min(3, Math.max(0, Math.floor(num(run.dir?.chair)))),
+      monitor: Math.min(3, Math.max(0, Math.floor(num(run.dir?.monitor)))),
+      keyboard: Math.min(3, Math.max(0, Math.floor(num(run.dir?.keyboard)))),
+      flower: Boolean(run.dir?.flower),
+      picture: Boolean(run.dir?.picture),
+      carpet: Boolean(run.dir?.carpet),
     },
   };
   if (out.run.levels[0][0] < 1) out.run.levels[0][0] = 1;

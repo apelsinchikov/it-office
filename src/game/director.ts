@@ -161,17 +161,26 @@ export function usePerk(g: Game, kind: PerkKind, tier: Tier): boolean {
   s.inventory[k]--;
   if (s.inventory[k] <= 0) delete s.inventory[k];
   if (kind === 'cash') {
-    g.grant(g.incomePerSec(true) * PERKS.cash.power[tier], 'quest');
+    g.grant(g.incomePerSec(true) * perkCashSec(g, tier), 'quest');
     return true;
   }
   // такой же уже действует — берём сильнейший уровень и складываем время
   const same = s.active.find((a) => a.kind === kind);
-  const dur = PERKS[kind].duration[tier];
+  const dur = perkDuration(g, kind, tier);
   if (same) {
     same.tier = Math.max(same.tier, tier) as Tier;
     same.left += dur;
   } else s.active.push({ kind, tier, left: dur });
   return true;
+}
+
+/** Обстановка кабинета директора увеличивает награды: перки действуют дольше, «деньги сразу» — больше. */
+export function perkDuration(g: Game, kind: PerkKind, tier: Tier): number {
+  return Math.round(PERKS[kind].duration[tier] * (1 + g.dirBonus()));
+}
+
+export function perkCashSec(g: Game, tier: Tier): number {
+  return Math.round(PERKS.cash.power[tier] * (1 + g.dirBonus()));
 }
 
 export function inventoryList(g: Game): { kind: PerkKind; tier: Tier; count: number }[] {

@@ -75,6 +75,20 @@ export const REST = {
 export type RestKind = keyof typeof REST;
 export const REST_KINDS: RestKind[] = ['coffee', 'fridge', 'games'];
 
+/**
+ * Кабинет директора: стол, стул, монитор, клавиатура (по 3 уровня) и цветок, картина, ковёр.
+ * Дохода не дают — каждое улучшение увеличивает награды за задания директора (длительность перков и деньги).
+ * Цены — в «ценах открытия кабинета директора».
+ */
+export const DIR_ITEMS = ['desk', 'chair', 'monitor', 'keyboard'] as const;
+export type DirItem = (typeof DIR_ITEMS)[number];
+export const DIR_SINGLES = ['flower', 'picture', 'carpet'] as const;
+export type DirSingle = (typeof DIR_SINGLES)[number];
+export const DIR_TIER_COST = [0.3, 30, 3000];
+export const DIR_TIER_BONUS = [0.1, 0.15, 0.25];
+export const DIR_SINGLE_COST: Record<DirSingle, number> = { flower: 0.5, picture: 2, carpet: 5 };
+export const DIR_SINGLE_BONUS = 0.1;
+
 /** Туалет: открытый туалет — сотрудники меньше отвлекаются, +3% ко всему офису. */
 export const TOILET_BONUS = 0.03;
 

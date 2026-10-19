@@ -139,6 +139,11 @@ const D = {
   'perk.for': ['на {time}', 'for {time}'],
   'perk.used': ['Перк применён', 'Perk used'],
   'rest.badge': ['Можно улучшить', 'Upgrade ready'],
+  'dir.room': ['Кабинет директора', "Director's office"],
+  'dir.bonus': ['Обстановка кабинета: награды за задания +{n}% (перки дольше, «деньги сразу» больше)', 'Office furnishings: task rewards +{n}% (perks last longer, instant cash is bigger)'],
+  'dir.perItem': ['+{n}% к наградам', '+{n}% rewards'],
+  'item.picture': ['Картина', 'Painting'],
+  'item.carpet': ['Ковёр', 'Carpet'],
   // аврал и тикеты
   'avral': ['Аврал', 'Crunch'],
   'avral.active': ['Аврал! ×3', 'Crunch! ×3'],

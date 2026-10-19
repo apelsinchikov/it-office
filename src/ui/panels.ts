@@ -3,8 +3,8 @@
 import type { Purchase } from '../game/advisor';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { COMPANY_STYLES, DEPTS, DESKS, SEQUENCE, SHOP, companyDef, stepIndex, type RoomId, type Step } from '../game/config';
-import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
-import { FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
+import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, perkCashSec, perkDuration, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
+import { DIR_ITEMS, DIR_SINGLES, DIR_SINGLE_BONUS, DIR_TIER_BONUS, FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
 import { formatNumber } from '../game/format';
 import type { Game } from '../game/game';
 import { PHRASES, PHRASE_GROUPS, TOTAL_PHRASES, phraseId, type PhraseGroup } from '../game/phrases';
@@ -309,17 +309,18 @@ export function restPanel(ctx: Ctx): Panel {
 
 // ---------- директор, холл, туалет ----------
 
-export function perkTitle(kind: PerkKind, tier: Tier): string {
+export function perkTitle(kind: PerkKind, tier: Tier, g?: Game): string {
   const pw = PERKS[kind].power[tier];
   if (kind === 'speed') return t('perk.speed', { n: Math.round(pw * 100) });
   if (kind === 'income') return t('perk.income', { n: pw });
   if (kind === 'tickets') return t('perk.tickets', { n: pw });
-  return t('perk.cash', { time: duration(pw) });
+  return t('perk.cash', { time: duration(g ? perkCashSec(g, tier) : pw) });
 }
 
-function perkFull(kind: PerkKind, tier: Tier): string {
-  const dur = PERKS[kind].duration[tier];
-  return dur > 0 ? `${perkTitle(kind, tier)} ${t('perk.for', { time: duration(dur) })}` : perkTitle(kind, tier);
+/** Перк с учётом обстановки кабинета (длительность и «деньги сразу» больше). */
+function perkFull(g: Game, kind: PerkKind, tier: Tier): string {
+  const dur = PERKS[kind].duration[tier] > 0 ? perkDuration(g, kind, tier) : 0;
+  return dur > 0 ? `${perkTitle(kind, tier, g)} ${t('perk.for', { time: duration(dur) })}` : perkTitle(kind, tier, g);
 }
 
 export function taskText(kind: string, target: number): string {
@@ -331,10 +332,6 @@ export function directorPanel(ctx: Ctx): Panel {
   if (!g.roomOpen('director')) return roomLockedPanel(ctx, 'director');
   const avral = h('button', { class: 'buy big avral-inline' });
   avral.addEventListener('click', () => ctx.onAvral());
-  const desk = buyButton(() => {
-    ctx.onDirectorDesk();
-    return true;
-  }, ctx);
 
   // задание
   const tTitle = h('div', { class: 'w-name' });
@@ -378,7 +375,7 @@ export function directorPanel(ctx: Ctx): Panel {
         h(
           'div',
           { class: 'worker' },
-          h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: perkFull(it.kind, it.tier) }), h('div', { class: 'w-inc', text: `${tr(TIER_NAMES[it.tier])}${it.count > 1 ? ` · ${t('inv.count', { n: it.count })}` : ''}` })),
+          h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: perkFull(g, it.kind, it.tier) }), h('div', { class: 'w-inc', text: `${tr(TIER_NAMES[it.tier])}${it.count > 1 ? ` · ${t('inv.count', { n: it.count })}` : ''}` })),
           use,
         ),
       );
@@ -395,8 +392,37 @@ export function directorPanel(ctx: Ctx): Panel {
     h('div', { class: 'section-head' }, h('h3', { text: t('inv.title') })),
     active,
     inv,
-    h('div', { class: 'card' }, h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: t('director.desk') })), desk.el),
   );
+
+  // обстановка кабинета: каждое улучшение увеличивает награды за задания
+  const bonusNote = h('p', { class: 'note small' });
+  body.append(h('div', { class: 'section-head' }, h('h3', { text: t('dir.room') })), bonusNote);
+  const furnRefs: (() => void)[] = [];
+  for (const item of DIR_ITEMS) {
+    const d0 = h('span', { class: 'f-dots' });
+    const btn = buyButton(() => g.buyDir(item), ctx, true);
+    body.append(h('div', { class: 'f-item' }, h('span', { class: 'f-name', text: t(`item.${item}` as Key) }), d0, btn.el));
+    furnRefs.push(() => {
+      const tier = g.dirTier(item);
+      d0.replaceChildren(dots(tier, 3));
+      if (tier >= 3) btn.set({ label: t('maxed'), enabled: false, done: true });
+      else {
+        const cost = g.dirCost(item);
+        btn.set({ label: t('dir.perItem', { n: Math.round(DIR_TIER_BONUS[tier] * 100) }), cost: fmt(cost), enabled: g.canAfford(cost) });
+      }
+    });
+  }
+  for (const id of DIR_SINGLES) {
+    const btn = buyButton(() => g.buyDirSingle(id), ctx, true);
+    body.append(h('div', { class: 'f-item' }, h('span', { class: 'f-name', text: t(`item.${id}` as Key) }), h('span', { class: 'f-dots' }), btn.el));
+    furnRefs.push(() => {
+      if (g.run.dir[id]) btn.set({ label: '✓', enabled: false, done: true });
+      else {
+        const cost = g.dirSingleCost(id);
+        btn.set({ label: t('dir.perItem', { n: Math.round(DIR_SINGLE_BONUS * 100) }), cost: fmt(cost), enabled: g.canAfford(cost) });
+      }
+    });
+  }
   return {
     title: t('room.director'),
     body,
@@ -405,8 +431,8 @@ export function directorPanel(ctx: Ctx): Panel {
       else if (g.canAvral()) avral.textContent = `${t('avral')} ×3 · 30`;
       else avral.textContent = `${t('avral')} · ${Math.ceil(g.avralCooldown)}`;
       avral.disabled = !g.canAvral();
-      if (g.state.directorDesk > 0) desk.set({ label: t('director.deskDone'), enabled: false, done: true });
-      else desk.set({ label: t('free'), enabled: true });
+      bonusNote.textContent = t('dir.bonus', { n: Math.round(g.dirBonus() * 100) });
+      furnRefs.forEach((f) => f());
 
       const ds = g.state.director;
       const task = ds.task;
@@ -431,7 +457,7 @@ export function directorPanel(ctx: Ctx): Panel {
         tBtns.style.display = 'none';
       }
       active.replaceChildren(
-        ...ds.active.map((a) => h('div', { class: 'perk-active' }, h('span', { text: `${t('inv.active')}: ${perkTitle(a.kind, a.tier)}` }), h('b', { text: duration(Math.ceil(a.left)) }))),
+        ...ds.active.map((a) => h('div', { class: 'perk-active' }, h('span', { text: `${t('inv.active')}: ${perkTitle(a.kind, a.tier, g)}` }), h('b', { text: duration(Math.ceil(a.left)) }))),
       );
       drawInv();
     },

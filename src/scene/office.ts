@@ -16,7 +16,6 @@ import {
   SPOT,
   deskPt,
   deskSlab,
-  directorDesk,
   flower,
   fridge,
   keyboard,
@@ -499,7 +498,8 @@ export class OfficeView {
     this.setToilet(this.toiletBusy);
 
     const dirDef = roomById('director');
-    place(this.directorDeskG, dirDef, 0.5, 0.42, 0.8, 0, 0);
+    // стол директора собран из тех же деталей, что и рабочие места, только крупнее
+    place(this.directorDeskG, dirDef, 0.5, 0.42, 0.62, 130, 160);
     this.syncDirectorDesk();
     const pl = new Container();
     pl.addChild(plant(th.plant, true));
@@ -507,10 +507,12 @@ export class OfficeView {
     this.director?.char.root.parent?.removeChild(this.director.char.root);
     this.director = new RoomWalker(
       DIRECTOR_LOOK,
-      [roomWorld(dirDef, 0.5, 0.66), roomWorld(dirDef, 0.12, 0.32), roomWorld(dirDef, 0.3, 0.75), roomWorld(dirDef, 0.7, 0.7)],
+      // обход вокруг стола по цепочке: у своего кресла → слева → спереди → справа (сквозь стол не ходит)
+      [roomWorld(dirDef, 0.22, 0.45), roomWorld(dirDef, 0.3, 0.78), roomWorld(dirDef, 0.72, 0.74), roomWorld(dirDef, 0.75, 0.4), roomWorld(dirDef, 0.62, 0.14)],
       this.rng,
       4,
       8,
+      true,
     );
     this.world.addChild(this.director.char.root);
 
@@ -781,9 +783,50 @@ export class OfficeView {
     this.rest.tv.addChild(tvStand(r.games));
   }
 
+  /** Ковёр и картина кабинета директора (в слое мира, пересоздаются при покупке). */
+  private dirDecor: Graphics[] = [];
+
   syncDirectorDesk(): void {
+    const g = this.game;
     for (const c of this.directorDeskG.removeChildren()) c.destroy({ children: true });
-    this.directorDeskG.addChild(directorDesk(this.game.state.directorDesk));
+    const t = (item: 'desk' | 'chair' | 'monitor' | 'keyboard'): number => g.dirTier(item);
+    this.directorDeskG.addChild(chairBack(t('chair')), deskSlab(t('desk')), keyboard(t('keyboard')), monitor(t('monitor')));
+    if (g.run.dir.flower) this.directorDeskG.addChild(flower());
+
+    for (const d of this.dirDecor) d.destroy();
+    this.dirDecor = [];
+    const def = roomById('director');
+    if (g.run.dir.carpet) {
+      // ковёр под столом: ромб на полу, ниже всего остального в комнате
+      const rug = new Graphics();
+      const pts = [roomWorld(def, 0.16, 0.18), roomWorld(def, 0.84, 0.18), roomWorld(def, 0.84, 0.82), roomWorld(def, 0.16, 0.82)];
+      poly(rug, pts.flatMap((p) => [p.x, p.y]), { fill: 0xb5303f, line: 3 });
+      const inner = [roomWorld(def, 0.22, 0.24), roomWorld(def, 0.78, 0.24), roomWorld(def, 0.78, 0.76), roomWorld(def, 0.22, 0.76)];
+      poly(rug, inner.flatMap((p) => [p.x, p.y]), { fill: 0xd9485a, line: 0 });
+      poly(rug, inner.flatMap((p) => [p.x, p.y]), { fill: 0xffd23f, alpha: 0, line: 2, lineColor: 0xffd23f });
+      rug.zIndex = -9e5;
+      this.world.addChild(rug);
+      this.dirDecor.push(rug);
+    }
+    if (g.run.dir.picture) {
+      // картина на стене кабинета со стороны зоны отдыха (u = 0), в фиксированном месте посередине
+      const pic = new Graphics();
+      const a = roomWorld(def, 0, 0.36);
+      const b = roomWorld(def, 0, 0.64);
+      const lo = 8;
+      const hi = WALL_H - 6;
+      poly(pic, [a.x, a.y - lo, b.x, b.y - lo, b.x, b.y - hi, a.x, a.y - hi], { fill: 0xc9a46a, line: 2.5 });
+      const k = 0.12;
+      const ix = (p: { x: number; y: number }, q: { x: number; y: number }): [number, number] => [p.x + (q.x - p.x) * k, p.y + (q.y - p.y) * k];
+      const [ax, ay] = ix(a, b);
+      const [bx, by] = ix(b, a);
+      poly(pic, [ax, ay - lo - 3, bx, by - lo - 3, bx, by - hi + 3, ax, ay - hi + 3], { fill: 0x8ee3ff, line: 0 });
+      poly(pic, [ax, ay - lo - 3, bx, by - lo - 3, bx, by - lo - 9, (ax + bx) / 2, (ay + by) / 2 - lo - 13, ax, ay - lo - 8], { fill: 0x3ccf63, line: 0 });
+      circle(pic, ax + (bx - ax) * 0.72, ay + (by - ay) * 0.72 - hi + 9, 3, { fill: 0xffd23f, line: 0 });
+      pic.zIndex = (a.y + b.y) / 2 + 1;
+      this.world.addChild(pic);
+      this.dirDecor.push(pic);
+    }
   }
 
   private syncHireMarks(): void {
@@ -894,6 +937,9 @@ export class OfficeView {
         break;
       case 'rest':
         this.syncRest();
+        break;
+      case 'dirFurn':
+        this.syncDirectorDesk();
         break;
       case 'company':
         this.setTheme();

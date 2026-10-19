@@ -13,7 +13,7 @@ import {
   nextMilestone,
   payoutIncome,
 } from './economy';
-import { acceptTask, directorTick, perkPower, tickPerks, usePerk } from './director';
+import { acceptTask, directorTick, perkDuration, perkPower, tickPerks, usePerk } from './director';
 import { eventIdAt } from './events';
 import { resetBefore } from './resets';
 import { formatNumber } from './format';
@@ -278,5 +278,22 @@ describe('сброс отдельного игрока', () => {
     expect(resetBefore(rules, ['aa'])).toBe(Date.parse('2026-10-19T13:40:00Z'));
     expect(resetBefore(rules, ['cc'])).toBe(0);
     expect(resetBefore(rules, [])).toBe(0);
+  });
+});
+
+describe('кабинет директора', () => {
+  it('обстановка увеличивает награды за задания', () => {
+    const g = fresh();
+    g.run.coins = 1e30;
+    expect(g.buyDir('monitor')).toBe(false); // кабинет закрыт
+    g.run.rooms.director = true;
+    expect(perkDuration(g, 'income', 0)).toBe(60);
+    expect(g.buyDir('monitor')).toBe(true);
+    expect(g.buyDirSingle('carpet')).toBe(true);
+    expect(g.buyDirSingle('carpet')).toBe(false);
+    expect(g.dirBonus()).toBeCloseTo(0.2);
+    expect(perkDuration(g, 'income', 0)).toBe(72);
+    g.reorg(true);
+    expect(g.dirBonus()).toBe(0); // реорганизация сбрасывает кабинет
   });
 });

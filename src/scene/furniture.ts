@@ -416,25 +416,6 @@ export function sink(): Graphics {
   return g;
 }
 
-/** Большой стол директора IT: tier 0 — обычный, 1 — улучшенный (после обучения). */
-export function directorDesk(tier: number): Graphics {
-  const g = new Graphics();
-  ellipse(g, 0, 18, 78, 18, { fill: OUT, alpha: 0.12, line: 0 });
-  const top = tier ? 0x6b3a22 : 0xc98545;
-  const left = tier ? 0x4e2a18 : 0xa96a33;
-  const right = tier ? 0x3e2113 : 0x8a5a2a;
-  isoBox(g, 0, 10, 70, 30, top, left, right);
-  if (tier) {
-    line(g, [-68, -18, 0, 16, 68, -18], 0xffd23f, 2.5);
-    rect(g, -10, -34, 18, 8, 2, { fill: 0xffd23f, line: 2 });
-  }
-  // ноутбук
-  poly(g, [10, -36, 30, -26, 14, -18, -6, -28], 0x9aa0b4);
-  poly(g, [-6, -28, 10, -36, 10, -56, -6, -48], OUT);
-  poly(g, [-3, -31, 7, -36, 7, -52, -3, -47], { fill: 0x8ee3ff, line: 0 });
-  return g;
-}
-
 /** Растение в кадке на полу. */
 export function plant(color = 0x3ccf63, big = false): Graphics {
   const g = new Graphics();
