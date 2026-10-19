@@ -75,28 +75,31 @@ const item = (z: number): { c: Container; g: Graphics } => {
 
 // ======================= зона отдыха =======================
 
-/** Где что стоит в зоне отдыха — для сетки проходимости. */
+/**
+ * Где что стоит в зоне отдыха — для сетки проходимости. Всё высокое — у стены этажа с окнами (v = 0):
+ * за ней никто не ходит, поэтому мебель никого не закрывает. У внутренней стены (u = 0) — только низкое растение.
+ */
 export const LOUNGE_BLOCKS: Block[] = [
-  [0.0, 0.22, 0.06, 0.46], // стойка с кофемашиной
-  [0.0, 0.19, 0.54, 0.76], // холодильник
-  [0.4, 0.88, 0.0, 0.24], // диван
-  [0.46, 0.82, 0.6, 0.72], // тумба с телевизором
-  [0.88, 0.97, 0.03, 0.13], // растение
+  [0.0, 0.27, 0.0, 0.2], // стойка с кофемашиной
+  [0.26, 0.44, 0.0, 0.2], // холодильник
+  [0.44, 0.92, 0.0, 0.26], // диван
+  [0.48, 0.88, 0.58, 0.74], // тумба с телевизором
+  [0.02, 0.16, 0.8, 0.94], // растение
 ];
 
 /** Места в зоне отдыха: (u, v), куда смотреть (0 — вниз-вправо, 1 — вниз-влево, 2 — вверх-вправо, 3 — вверх-влево). */
 export const LOUNGE_SPOTS = {
   coffee: [
-    [0.29, 0.2, 1],
-    [0.31, 0.37, 0],
-    [0.42, 0.28, 1],
+    [0.1, 0.3, 0],
+    [0.24, 0.31, 1],
+    [0.17, 0.45, 1],
   ],
   sofa: [
-    [0.57, 0.15, 1],
-    [0.73, 0.15, 1],
+    [0.6, 0.15, 1],
+    [0.77, 0.15, 1],
   ],
-  viewer: [0.36, 0.5, 0],
-  fridge: [0.3, 0.65, 3],
+  viewer: [0.4, 0.5, 0],
+  fridge: [0.35, 0.28, 2],
 } as const;
 
 export interface Lounge {
@@ -121,98 +124,98 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     items.push(c);
   }
 
-  // стойка у стены с кофемашиной и кружками
+  // стойка у стены этажа (под окнами) с кофемашиной и кружками
   const steam = new Graphics();
   {
-    const { c, g } = item(P.z(0.2, 0.44));
-    P.shadow(g, 0.02, 0.2, 0.08, 0.44);
-    P.box(g, 0.02, 0.2, 0.08, 0.44, 0, 28, 0xf0b46a, 0xc98545, 0xa96a33);
-    P.panelV(g, 0.05, 0.17, 0.44, 6, 22, { fill: shade(0xc98545, -0.12), line: 2 });
+    const { c, g } = item(P.z(0.25, 0.18));
+    P.shadow(g, 0.03, 0.25, 0.02, 0.18);
+    P.box(g, 0.03, 0.25, 0.02, 0.18, 0, 28, 0xf0b46a, 0xc98545, 0xa96a33);
+    P.panelV(g, 0.06, 0.22, 0.18, 6, 22, { fill: shade(0xc98545, -0.12), line: 2 });
     const t = tiers.coffee;
     const H = 28;
+    // кофемашина: передняя грань v = 0,16 смотрит в комнату
     if (t <= 0) {
-      // чайник
-      P.box(g, 0.08, 0.14, 0.2, 0.27, H, H + 13, 0xf4f4f8, 0xd9dbe6, 0xc3c6d4, 2);
-      P.box(g, 0.1, 0.12, 0.27, 0.3, H + 6, H + 9, 0xd9dbe6, 0xc3c6d4, 0xc3c6d4, 1.5);
+      P.box(g, 0.12, 0.18, 0.06, 0.12, H, H + 13, 0xf4f4f8, 0xd9dbe6, 0xc3c6d4, 2);
+      P.box(g, 0.14, 0.16, 0.12, 0.15, H + 6, H + 9, 0xd9dbe6, 0xc3c6d4, 0xc3c6d4, 1.5);
     } else if (t === 1) {
-      P.box(g, 0.06, 0.15, 0.18, 0.3, H, H + 30, 0x5a6078, 0x3b3f55, 0x2f3344);
-      P.panelU(g, 0.15, 0.21, 0.27, H + 4, H + 14, { fill: 0x7a4a22, line: 2 });
+      P.box(g, 0.1, 0.21, 0.04, 0.14, H, H + 30, 0x5a6078, 0x3b3f55, 0x2f3344);
+      P.panelV(g, 0.13, 0.18, 0.14, H + 4, H + 14, { fill: 0x7a4a22, line: 2 });
     } else if (t === 2) {
-      P.box(g, 0.05, 0.16, 0.17, 0.31, H, H + 34, 0xe6e8f0, 0xc3c6d4, 0x9aa0b4);
-      P.box(g, 0.07, 0.12, 0.2, 0.25, H + 34, H + 44, 0x8ee3ff, 0x5a6078, 0x454b63, 2);
-      P.panelU(g, 0.16, 0.21, 0.27, H + 6, H + 16, { fill: 0xffffff, line: 2 });
+      P.box(g, 0.09, 0.22, 0.03, 0.15, H, H + 34, 0xe6e8f0, 0xc3c6d4, 0x9aa0b4);
+      P.box(g, 0.12, 0.17, 0.05, 0.1, H + 34, H + 44, 0x8ee3ff, 0x5a6078, 0x454b63, 2);
+      P.panelV(g, 0.12, 0.19, 0.15, H + 14, H + 24, { fill: 0x262338, line: 2 });
+      P.box(g, 0.14, 0.17, 0.12, 0.15, H, H + 6, 0xffffff, 0xf4f4f8, 0xe6e8f0, 1.5);
     } else {
-      P.box(g, 0.04, 0.17, 0.16, 0.32, H, H + 38, 0xff5a5a, 0xe8173a, 0xb5121d);
-      P.panelU(g, 0.17, 0.19, 0.22, H + 8, H + 18, { fill: OUT, line: 0 });
-      P.panelU(g, 0.17, 0.26, 0.29, H + 8, H + 18, { fill: OUT, line: 0 });
-      const [x, y] = P.P(0.1, 0.24, H + 38);
+      P.box(g, 0.08, 0.23, 0.02, 0.16, H, H + 38, 0xff5a5a, 0xe8173a, 0xb5121d);
+      P.panelV(g, 0.11, 0.14, 0.16, H + 8, H + 18, { fill: OUT, line: 0 });
+      P.panelV(g, 0.17, 0.2, 0.16, H + 8, H + 18, { fill: OUT, line: 0 });
+      const [x, y] = P.P(0.15, 0.09, H + 38);
       ellipse(g, x, y, 7, 3, { fill: 0xffffff, line: 2 });
     }
     // кружки на стойке
-    for (const [v, col] of [
-      [0.36, 0xffffff],
-      [0.4, 0xff7a45],
+    for (const [u, col] of [
+      [0.05, 0xffffff],
+      [0.24, 0xff7a45],
     ] as const) {
-      const [x, y] = P.P(0.11, v, H);
+      const [x, y] = P.P(u, 0.12, H);
       rect(g, x - 4, y - 9, 8, 9, 2, col);
     }
-    const [sx, sy] = P.P(0.1, 0.24, H + (t <= 0 ? 16 : t === 1 ? 32 : t === 2 ? 46 : 42));
+    const [sx, sy] = P.P(0.15, 0.09, H + (t <= 0 ? 16 : t === 1 ? 32 : t === 2 ? 46 : 42));
     line(steam, [sx, sy, sx - 3, sy - 6, sx + 1, sy - 12, sx - 2, sy - 18], 0xb9b6c8, 2);
     c.addChild(steam);
     items.push(c);
   }
 
-  // холодильник у стены дверцей в комнату: стоит на полу, тень прямо под ним
+  // холодильник рядом со стойкой, дверцей в комнату (грань v = 0,17); стоит на полу, тень прямо под ним
   const fridgeOpen = new Graphics();
   const fridgeClosed = new Graphics();
   {
-    const { c, g } = item(P.z(0.17, 0.74));
+    const u0 = 0.28;
+    const u1 = 0.42;
+    const v0 = 0.02;
+    const v1 = 0.17;
+    const { c, g } = item(P.z(u1, v1));
     const t = tiers.fridge;
     const H = [48, 62, 74, 76][t] ?? 48;
     const body = t >= 3 ? [0xff5a5a, 0xe8173a, 0xb5121d] : t === 2 ? [0xe6e8f0, 0xc3c6d4, 0xd9dbe6] : [0xffffff, 0xf4f4f8, 0xe6e8f0];
-    P.shadow(g, 0.03, 0.17, 0.56, 0.74);
-    P.box(g, 0.03, 0.17, 0.56, 0.74, 0, H, body[0], body[1], body[2]);
-    // закрытая дверца: ручка и магнитики; у двухдверного — шов посередине
-    if (t === 2) line(fridgeClosed, [...P.P(0.17, 0.65, 2), ...P.P(0.17, 0.65, H - 2)], OUT, 2);
-    line(fridgeClosed, [...P.P(0.17, 0.59, H * 0.45), ...P.P(0.17, 0.59, H * 0.75)], OUT, 3);
-    const [mx, my] = P.P(0.17, 0.68, H * 0.6);
+    P.shadow(g, u0, u1, v0, v1);
+    P.box(g, u0, u1, v0, v1, 0, H, body[0], body[1], body[2]);
+    if (t === 2) line(fridgeClosed, [...P.P((u0 + u1) / 2, v1, 2), ...P.P((u0 + u1) / 2, v1, H - 2)], OUT, 2);
+    line(fridgeClosed, [...P.P(u1 - 0.025, v1, H * 0.45), ...P.P(u1 - 0.025, v1, H * 0.75)], OUT, 3);
+    const [mx, my] = P.P(u0 + 0.04, v1, H * 0.6);
     rect(fridgeClosed, mx - 3, my - 3, 6, 6, 1, { fill: 0xffd23f, line: 1.5 });
-    if (t >= 3) P.panelU(fridgeClosed, 0.17, 0.61, 0.71, H * 0.2, H * 0.8, { fill: 0xc7ecff, alpha: 0.8, line: 2 });
-    // открытая: свет и полки внутри, дверца распахнута в сторону комнаты
-    P.panelU(fridgeOpen, 0.17, 0.57, 0.73, 3, H - 3, { fill: 0xfff3c4, line: 2 });
-    for (const k of [0.3, 0.55, 0.8]) line(fridgeOpen, [...P.P(0.17, 0.57, H * k), ...P.P(0.17, 0.73, H * k)], 0xc9a46a, 2);
-    for (const [v, k, col] of [
-      [0.6, 0.32, 0xff7a45],
-      [0.66, 0.57, 0x3ccf63],
-      [0.69, 0.32, 0x4fb3ff],
+    if (t >= 3) P.panelV(fridgeClosed, u0 + 0.03, u1 - 0.03, v1, H * 0.2, H * 0.8, { fill: 0xc7ecff, alpha: 0.8, line: 2 });
+    // открытый: свет и полки внутри, дверца распахнута в комнату на петлях у левого края
+    P.panelV(fridgeOpen, u0 + 0.01, u1 - 0.01, v1, 3, H - 3, { fill: 0xfff3c4, line: 2 });
+    for (const k of [0.3, 0.55, 0.8]) line(fridgeOpen, [...P.P(u0 + 0.01, v1, H * k), ...P.P(u1 - 0.01, v1, H * k)], 0xc9a46a, 2);
+    for (const [u, k, col] of [
+      [u0 + 0.03, 0.32, 0xff7a45],
+      [u0 + 0.07, 0.57, 0x3ccf63],
+      [u0 + 0.1, 0.32, 0x4fb3ff],
     ] as const) {
-      const [x, y] = P.P(0.17, v, H * k);
+      const [x, y] = P.P(u, v1, H * k);
       rect(fridgeOpen, x - 2, y - 9, 5, 9, 1.5, { fill: col, line: 1.5 });
     }
-    P.panelV(fridgeOpen, 0.17, 0.33, 0.74, 2, H - 2, { fill: body[1], line: 2.5 });
+    P.panelU(fridgeOpen, u0, v1, v1 + 0.14, 2, H - 2, { fill: body[1], line: 2.5 });
     fridgeOpen.visible = false;
     c.addChild(fridgeClosed, fridgeOpen);
     items.push(c);
   }
 
-  // диван у стены этажа: спинка позади сидящих, сиденье и подлокотники — тоже позади них по глубине
+  // диван у стены этажа: одна вещь — спинка, сиденье, два подлокотника; сидящие рисуются поверх него
   {
-    const dark = shade(sofaColor, -0.25);
-    const back = item(P.z(0.4, 0.06));
-    P.box(back.g, 0.4, 0.88, 0.0, 0.06, 0, 40, shade(sofaColor, 0.1), dark, shade(dark, -0.1));
-    items.push(back.c);
-    const seat = item(P.z(0.4, 0.1));
-    P.shadow(seat.g, 0.4, 0.88, 0.06, 0.24);
-    P.box(seat.g, 0.4, 0.88, 0.06, 0.24, 0, 16, sofaColor, dark, shade(dark, -0.1));
-    line(seat.g, [...P.P(0.64, 0.06, 16), ...P.P(0.64, 0.24, 16)], dark, 2);
-    P.box(seat.g, 0.4, 0.45, 0.06, 0.24, 0, 26, shade(sofaColor, 0.08), dark, shade(dark, -0.1));
-    // подушка
-    const [px, py] = P.P(0.47, 0.06, 26);
-    ellipse(seat.g, px, py, 9, 6, 0xffd23f);
-    items.push(seat.c);
-    const arm = item(P.z(0.88, 0.24));
-    P.box(arm.g, 0.83, 0.88, 0.06, 0.24, 0, 26, shade(sofaColor, 0.08), dark, shade(dark, -0.1));
-    items.push(arm.c);
+    const dark = shade(sofaColor, -0.22);
+    const side = shade(sofaColor, -0.34);
+    const { c, g } = item(P.z(0.44, 0.04));
+    const u0 = 0.46;
+    const u1 = 0.9;
+    P.shadow(g, u0, u1, 0.0, 0.25);
+    P.box(g, u0, u1, 0.0, 0.07, 0, 42, shade(sofaColor, 0.12), dark, side);
+    P.box(g, u0 + 0.04, u1 - 0.04, 0.07, 0.24, 0, 16, sofaColor, dark, side);
+    line(g, [...P.P((u0 + u1) / 2, 0.07, 16), ...P.P((u0 + u1) / 2, 0.24, 16)], dark, 2);
+    P.box(g, u0, u0 + 0.04, 0.03, 0.25, 0, 26, shade(sofaColor, 0.08), dark, side);
+    P.box(g, u1 - 0.04, u1, 0.03, 0.25, 0, 26, shade(sofaColor, 0.08), dark, side);
+    items.push(c);
   }
 
   // тумба с телевизором экраном к дивану: камера видит заднюю крышку, приставку и стопку игр
@@ -243,16 +246,16 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     items.push(c);
   }
 
-  // растение в углу
+  // невысокое растение у внутренней стены — его высоты не хватит, чтобы кого-то закрыть
   {
-    const { c, g } = item(P.z(0.97, 0.13));
-    P.shadow(g, 0.88, 0.97, 0.03, 0.13);
-    P.box(g, 0.89, 0.96, 0.04, 0.12, 0, 14, 0xff7a45, 0xe0662f, 0xc9561f, 2);
-    const [x, y] = P.P(0.925, 0.08, 14);
+    const { c, g } = item(P.z(0.15, 0.93));
+    P.shadow(g, 0.04, 0.14, 0.82, 0.92);
+    P.box(g, 0.05, 0.13, 0.83, 0.91, 0, 13, 0xff7a45, 0xe0662f, 0xc9561f, 2);
+    const [x, y] = P.P(0.09, 0.87, 13);
     for (const [dx, dy, r] of [
-      [-6, -10, 8],
-      [6, -12, 8],
-      [0, -20, 9],
+      [-6, -8, 7],
+      [6, -9, 7],
+      [0, -16, 8],
     ] as const)
       circle(g, x + dx, y + dy, r, 0x3ccf63);
     items.push(c);
