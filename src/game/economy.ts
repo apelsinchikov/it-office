@@ -26,8 +26,13 @@ export const TUNING = {
   hireFloorSec: [0, 30, 45, 60, 90, 120],
   /** Множитель Грантов за реорганизацию. */
   grantsK: 2,
-  /** Показатель пересчёта старых чисел (undefined — по deptCostF). */
+  /** Показатель пересчёта старых чисел зоны отдыха и стартового капитала (undefined — по deptCostF). */
   scaleExp: 1 as number | undefined,
+  /**
+   * Показатель пересчёта Грантов: при шаге отдела ×10 000 числа к концу офиса больше в ~10^(4/3) раза по порядку,
+   * поэтому делитель и степень Грантов пересчитываются, чтобы Грантов было столько же, сколько при старом шаге ×1000.
+   */
+  grantsExp: 1.15 as number | undefined,
 };
 
 /** Пересчёт старых абсолютных чисел (зона отдыха, Гранты) при смене шага отдела; при scaleExp = 1 — без изменений. */
@@ -75,11 +80,14 @@ export const TOILET_BONUS = 0.03;
 
 /** Гранты: floor(K · (заработок / DIV)^POW · (1 + 0.05 · лоббирование)); DIV и POW пересчитаны под новые числа. */
 export const GRANTS_K = 2;
+function grantsExp(): number {
+  return TUNING.grantsExp ?? Math.log10(TUNING.deptCostF) / 3;
+}
 export function grantsDivBase(): number {
-  return scaleOld(1e10);
+  return 10 ** (10 * grantsExp());
 }
 export function grantsPow(): number {
-  return 0.4 / (TUNING.scaleExp ?? Math.log10(TUNING.deptCostF) / 3);
+  return 0.4 / grantsExp();
 }
 export const GRANTS_DIV = 1e10;
 export const GRANTS_POW = 0.4;

@@ -378,7 +378,7 @@ export function directorPanel(ctx: Ctx): Panel {
         h(
           'div',
           { class: 'worker' },
-          h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: `${perkFull(it.kind, it.tier)}${it.count > 1 ? ` ×${it.count}` : ''}` }), h('div', { class: 'w-inc', text: tr(TIER_NAMES[it.tier]) })),
+          h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: perkFull(it.kind, it.tier) }), h('div', { class: 'w-inc', text: `${tr(TIER_NAMES[it.tier])}${it.count > 1 ? ` · ${t('inv.count', { n: it.count })}` : ''}` })),
           use,
         ),
       );

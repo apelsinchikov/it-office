@@ -2,6 +2,8 @@
 import { PROFILES, SIM_FLAGS, simulate } from './simulate';
 if (process.env.NOQUESTS) SIM_FLAGS.quests = false;
 import { COMPANY_TUNING } from '../src/game/config';
+import { TUNING } from '../src/game/economy';
+if (process.env.GEXP) TUNING.grantsExp = Number(process.env.GEXP);
 if (process.argv[5]) COMPANY_TUNING.costStep = Number(process.argv[5]);
 
 const only = process.argv[2];

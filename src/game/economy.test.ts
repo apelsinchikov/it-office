@@ -3,7 +3,9 @@ import { companyDef, COMPANY_TUNING } from './config';
 import {
   costForLevels,
   deptUnlockCost,
+  grantsDivBase,
   grantsFor,
+  grantsPow,
   levelCost,
   maxAffordable,
   milestoneCount,
@@ -60,11 +62,13 @@ describe('формулы', () => {
     expect(payoutIncome(0, 1, 1)).toBe(6);
   });
 
-  it('отдел 2 стоит 3M, Гранты с 10 миллиардов', () => {
+  it('отдел 2 стоит 3M, Гранты с ~316 миллиардов', () => {
     expect(deptUnlockCost(1)).toBeCloseTo(3.03e6, -2);
-    expect(grantsFor(9e9, 0)).toBe(0);
-    expect(grantsFor(1e10, 0)).toBe(2);
-    expect(grantsFor(1e10 * 5.7 ** 1, 0)).toBe(4);
+    const div = grantsDivBase();
+    expect(div).toBeCloseTo(10 ** 11.5, -8);
+    expect(grantsFor(div * 0.9, 0)).toBe(0);
+    expect(grantsFor(div, 0)).toBe(2);
+    expect(grantsFor(div * 2 ** (1 / grantsPow()) * 1.001, 0)).toBe(4);
   });
 });
 
@@ -165,7 +169,7 @@ describe('игра', () => {
 
   it('реорганизация: Гранты, сброс, подъёмные', () => {
     const g = fresh();
-    g.run.earned = 1e10 * 10 ** 2.5 * 1.001; // 20 Грантов
+    g.run.earned = grantsDivBase() * 10 ** (1 / grantsPow()) * 1.001; // 20 Грантов
     expect(g.pendingGrants()).toBe(20);
     expect(g.reorgIsGood()).toBe(true);
     expect(g.reorg()).toBe(20);
