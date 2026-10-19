@@ -226,72 +226,7 @@ export function steam(x: number, y: number): Graphics {
   return g;
 }
 
-// ---------- пост сисадмина (вместо стола) ----------
-
-/** Рисует пост в координатах холста 120×110; сцена масштабирует ×1,9 в координаты стола. */
-export function sysadminPost(tier: number): Container {
-  const c = new Container();
-  const g = new Graphics();
-  ellipse(g, 60, 98, 46, 10, { fill: OUT, alpha: 0.12, line: 0 });
-  switch (tier) {
-    case 0:
-    case 1: {
-      const wood = tier === 1;
-      rect(g, 15, 62, 5, 30, 0, wood ? 0x7a4a22 : 0x5a6078);
-      rect(g, 100, 62, 5, 30, 0, wood ? 0x7a4a22 : 0x5a6078);
-      rect(g, 58, 86, 5, 20, 0, wood ? 0x7a4a22 : 0x5a6078);
-      poly(g, [16, 58, 60, 80, 60, 88, 16, 66], wood ? 0xc98545 : 0x9aa0b4);
-      poly(g, [60, 80, 104, 58, 104, 66, 60, 88], wood ? 0xa96a33 : 0x7d8398);
-      poly(g, [60, 36, 104, 58, 60, 80, 16, 58], wood ? 0xf0b46a : 0xc3c6d4);
-      poly(g, [52, 50, 70, 59, 52, 68, 34, 59], 0x9aa0b4);
-      poly(g, [34, 59, 52, 50, 52, 28, 34, 37], OUT);
-      poly(g, [37, 56, 49, 50, 49, 32, 37, 38], { fill: 0x8ee3ff, line: 0 });
-      if (wood) {
-        line(g, [74, 64, 90, 56], 0xff7a45, 4);
-        line(g, [90, 56, 96, 53], OUT, 2);
-      }
-      break;
-    }
-    case 2:
-      poly(g, [14, 8, 60, 31, 60, 60, 14, 37], 0xc9a46a);
-      line(g, [22, 20, 22, 36], OUT, 4);
-      stroke(g, 'M32 26 L32 40 M28 26 L36 26', OUT, 3);
-      circle(g, 46, 38, 5, { fill: 0xc9a46a, line: 3 });
-      rect(g, 16, 62, 4, 32, 0, 0x9aa0b4);
-      rect(g, 100, 62, 4, 30, 0, 0x9aa0b4);
-      rect(g, 58, 88, 4, 18, 0, 0x9aa0b4);
-      poly(g, [16, 58, 60, 80, 60, 90, 16, 68], 0x9aa0b4);
-      poly(g, [60, 80, 104, 58, 104, 68, 60, 90], 0x7d8398);
-      poly(g, [60, 36, 104, 58, 60, 80, 16, 58], 0xc3c6d4);
-      poly(g, [74, 44, 88, 51, 88, 59, 74, 52], 0xe8173a);
-      poly(g, [88, 51, 96, 47, 96, 55, 88, 59], 0xb5121d);
-      poly(g, [74, 44, 82, 40, 96, 47, 88, 51], 0xff5a5a);
-      break;
-    default:
-      poly(g, [20, 18, 44, 30, 44, 104, 20, 92], 0x2f3344);
-      poly(g, [44, 30, 68, 18, 68, 92, 44, 104], OUT);
-      poly(g, [44, 6, 68, 18, 44, 30, 20, 18], 0x4b5270);
-      rect(g, 76, 66, 4, 26, 0, 0x9aa0b4);
-      rect(g, 104, 58, 4, 22, 0, 0x9aa0b4);
-      poly(g, [72, 62, 90, 71, 90, 77, 72, 68], 0x9aa0b4);
-      poly(g, [90, 71, 108, 62, 108, 68, 90, 77], 0x7d8398);
-      poly(g, [90, 53, 108, 62, 90, 71, 72, 62], 0xc3c6d4);
-  }
-  c.addChild(g);
-  if (tier >= 3) {
-    // мигающие огоньки стойки — отдельные, чтобы сцена могла мигать
-    const lights = new Container();
-    const colors = [0x3ccf63, 0x4fb3ff, 0x3ccf63, 0xffd23f, 0x4fb3ff, 0x3ccf63];
-    colors.forEach((col, i) => {
-      const l = new Graphics();
-      line(l, [24, 30 + i * 10, 40, 38 + i * 10], col, 2.5);
-      lights.addChild(l);
-    });
-    lights.label = 'lights';
-    c.addChild(lights);
-  }
-  return c;
-}
+// ---------- вещи сисадмина ----------
 
 const TOOLBOX = [0xc9a46a, 0xe8173a, 0xe8173a, 0x2f3344];
 

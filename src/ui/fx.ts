@@ -20,6 +20,20 @@ interface Bubble {
   speaker: Speaker;
   room: string;
   left: number;
+  /** Размер меряем один раз: чтение offsetWidth каждый кадр после записи transform заставляет браузер пересчитывать вёрстку. */
+  w?: number;
+  h?: number;
+}
+
+/** Размеры тикетов (они не меняются после появления). */
+const ticketSize = new WeakMap<HTMLElement, { w: number; h: number }>();
+function sizeOf(el: HTMLElement, w0: number, h0: number): { w: number; h: number } {
+  let sz = ticketSize.get(el);
+  if (!sz) {
+    sz = { w: el.offsetWidth || w0, h: el.offsetHeight || h0 };
+    if (el.offsetWidth) ticketSize.set(el, sz);
+  }
+  return sz;
 }
 
 export class Fx {
@@ -225,8 +239,9 @@ export class Fx {
       t.el.style.visibility = hide ? 'hidden' : '';
       if (hide) continue;
       t.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%) scale(${s.toFixed(2)})`;
-      const w = (t.el.offsetWidth || 150) * s;
-      const h = (t.el.offsetHeight || 36) * s;
+      const sz = sizeOf(t.el, 150, 36);
+      const w = sz.w * s;
+      const h = sz.h * s;
       taken.push({ x: p.x - w / 2 - 4, y: p.y - h - 4, w: w + 8, h: h + 8 });
     }
 
@@ -237,8 +252,12 @@ export class Fx {
         b.el.style.opacity = '0';
         continue;
       }
-      const bw = b.el.offsetWidth || 120;
-      const bh = b.el.offsetHeight || 40;
+      if (!b.w) {
+        b.w = b.el.offsetWidth || 0;
+        b.h = b.el.offsetHeight || 0;
+      }
+      const bw = b.w || 120;
+      const bh = b.h || 40;
       let x = p.x - bw / 2;
       const rb = this.roomBoundsX(b.room);
       if (rb) x = Math.max(Math.min(x, rb[1] - bw), rb[0]);

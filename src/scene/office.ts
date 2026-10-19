@@ -92,7 +92,6 @@ class DeskView {
   private hands: Container[] = [];
   private code: Container[] = [];
   private steamG: Graphics | null = null;
-  private lights: Container | null = null;
   private t = Math.random() * 10;
   readonly look: Look;
 
@@ -129,7 +128,6 @@ class DeskView {
     this.hands = [];
     this.code = [];
     this.steamG = null;
-    this.lights = null;
     this.buildDesk(rng);
   }
 
@@ -214,7 +212,6 @@ class DeskView {
       this.steamG.y = -12 * ph;
       this.steamG.alpha = ph < 0.3 ? ph / 0.3 : 1 - (ph - 0.3) / 0.7;
     }
-    if (this.lights) this.lights.children.forEach((l, i) => (l.alpha = 0.4 + 0.6 * ((Math.sin(this.t * 3 + i * 1.7) + 1) / 2)));
   }
 }
 
@@ -968,21 +965,25 @@ export class OfficeView {
 
   // ---------- кадр ----------
 
+  /** Пул надписей «+N»: не создаём и не уничтожаем Text (и его текстуру) на каждую выплату. */
+  private popupPool: Text[] = [];
+
   private spawnPopup(d: number, k: number, amount: number, big: boolean): void {
     const v = this.desks.get(this.key(d, k));
     if (!v) return;
     if (!big && this.popups.length > 24) return;
-    const text = new Text({
-      text: `+${formatNumber(amount)}`,
-      style: {
-        fill: big ? '#7dff9a' : '#ffd166',
-        fontSize: big ? 26 : 17,
-        fontWeight: '800',
-        fontFamily: 'Nunito, system-ui, sans-serif',
-        stroke: { color: '#262338', width: 4 },
-      },
-    });
+    const text =
+      this.popupPool.pop() ??
+      new Text({
+        text: '',
+        style: { fill: '#ffd166', fontSize: 17, fontWeight: '800', fontFamily: 'Nunito, system-ui, sans-serif', stroke: { color: '#262338', width: 4 } },
+      });
+    text.text = `+${formatNumber(amount)}`;
+    text.style.fill = big ? '#7dff9a' : '#ffd166';
+    text.style.fontSize = big ? 26 : 17;
     text.anchor.set(0.5);
+    text.alpha = 1;
+    text.visible = true;
     const a = v.anchor();
     text.position.set(a.x, a.y - 8);
     this.top.addChild(text);
@@ -1006,7 +1007,10 @@ export class OfficeView {
       p.text.y -= dt * 42;
       p.text.alpha = Math.max(0, 1 - p.age / p.life);
       if (p.age >= p.life) {
-        p.text.destroy();
+        p.text.visible = false;
+        this.top.removeChild(p.text);
+        if (this.popupPool.length < 32) this.popupPool.push(p.text);
+        else p.text.destroy();
         this.popups.splice(i, 1);
       }
     }
