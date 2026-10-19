@@ -31,6 +31,8 @@ export const SPOT = {
   phone: [6, 44] as const,
   mug: [12, 16] as const,
   flower: [14, -46] as const,
+  /** Ящик с инструментами сисадмина — на полу перед столом справа. */
+  toolbox: [48, -36] as const,
 };
 
 interface Slab {
@@ -201,9 +203,9 @@ export function flower(): Container {
 export function typingHand(x0: number, y0: number, x1: number, y1: number, sleeve: number, skin: number): Container {
   const c = new Container();
   const g = new Graphics();
-  line(g, [x0, y0, x1, y1], OUT, 11);
-  line(g, [x0, y0, x1, y1], sleeve, 6);
-  circle(g, x1, y1 + 1, 5, skin);
+  line(g, [x0, y0, x1, y1], OUT, 9);
+  line(g, [x0, y0, x1, y1], sleeve, 5);
+  circle(g, x1, y1 + 1, 4.5, skin);
   c.addChild(g);
   return c;
 }
@@ -298,9 +300,10 @@ export function toolbox(tier: number): Graphics {
   const g = new Graphics();
   const hw = tier >= 2 ? 18 : 13;
   const h = tier >= 3 ? 34 : tier >= 2 ? 22 : 14;
-  isoBox(g, 214, 176, hw, h, tier === 0 ? 0xe0c48a : 0xff5a5a, TOOLBOX[tier], tier === 0 ? 0xa98a55 : 0xb5121d);
-  if (tier >= 2) line(g, [214 - hw + 3, 176 - h / 2, 214 - 3, 176 + hw / 2 - h / 2 - 2], OUT, 2);
-  if (tier === 3) line(g, [214 - hw + 3, 176 - h / 2 + 10, 214 - 3, 176 + hw / 2 - h / 2 + 8], 0x2fbfae, 2);
+  const [cx, cy] = deskPt(SPOT.toolbox[0], SPOT.toolbox[1]);
+  isoBox(g, cx, cy, hw, h, tier === 0 ? 0xe0c48a : 0xff5a5a, TOOLBOX[tier], tier === 0 ? 0xa98a55 : 0xb5121d);
+  if (tier >= 2) line(g, [cx - hw + 3, cy - h / 2, cx - 3, cy + hw / 2 - h / 2 - 2], OUT, 2);
+  if (tier === 3) line(g, [cx - hw + 3, cy - h / 2 + 10, cx - 3, cy + hw / 2 - h / 2 + 8], 0x2fbfae, 2);
   return g;
 }
 

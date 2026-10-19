@@ -154,7 +154,8 @@ class DeskView {
     const sleeve = sleeveOf(this.look);
     const kl = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] + 10, DESK.H + 2);
     const kr = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] - 10, DESK.H + 2);
-    this.hands = [typingHand(seat[0] - 10, seat[1] - 52, kl[0], kl[1], sleeve, this.look.skin), typingHand(seat[0] + 14, seat[1] - 56, kr[0], kr[1], sleeve, this.look.skin)];
+    // предплечья от локтей у края стола до клавиатуры
+    this.hands = [typingHand(kl[0] - 14, kl[1] - 9, kl[0], kl[1], sleeve, this.look.skin), typingHand(kr[0] - 13, kr[1] - 12, kr[0], kr[1], sleeve, this.look.skin)];
     this.scene.addChild(...this.hands);
     this.code = codeLines(monT);
     // addChild() без аргументов в Pixi 8 падает — пустой список не передаём
@@ -162,11 +163,12 @@ class DeskView {
     if (this.tier('phone') >= 0) this.scene.addChild(phone(this.tier('phone')));
     if (this.tier('mouse') >= 0) this.scene.addChild(mouse(this.tier('mouse')));
     if (post) {
-      // настольная лампа рядом с монитором (нарисована в координатах поста 120×110, ×1,9; основание — точка 24,54)
+      // настольная лампа рядом с монитором (нарисована в координатах поста 120×110; основание — точка 24,54)
       const l = lamp(Math.max(0, this.tier('lamp')));
       const at = deskPt(SPOT.lamp[0], SPOT.lamp[1], DESK.H);
-      l.scale.set(1.9);
-      l.position.set(at[0] - 24 * 1.9, at[1] - 54 * 1.9);
+      const ls = 1.3;
+      l.scale.set(ls);
+      l.position.set(at[0] - 24 * ls, at[1] - 54 * ls);
       this.scene.addChild(l);
       this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     }
