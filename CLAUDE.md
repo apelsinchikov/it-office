@@ -21,3 +21,10 @@
 
 - Дизайн-документ: `docs/GDD.md` и его копия в Claude Docs — обновлять обе при изменении правил игры.
 - Итоги симуляции — `sim/README.md`.
+
+## OpenSpec (экономия контекста)
+
+- Перед задачей читать `openspec/project.md` (карта кода и правила) и только нужные `openspec/specs/<домен>/spec.md`; код открывать точечно по карте, а не целиком.
+- Домены: economy, progression, director, meta, active-play, quests, office-scene, hud, saves, platform.
+- Изменил поведение игры — в том же коммите обновить соответствующую спеку (плюс `docs/GDD.md` и копию в Claude Docs, если меняются правила).
+- Крупные изменения — через `openspec/changes/<имя>/` (proposal, tasks, дельта спек), после выкладки — в `changes/archive/`.
