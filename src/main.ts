@@ -21,6 +21,7 @@ import { OfficeView } from './scene/office';
 import { initTelegram, onTelegramLayout } from './telegram';
 import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
+import { DebugNotes } from './ui/debugNotes';
 import { Tutorial } from './ui/tutorial';
 
 const VERSION = '1.0.0';
@@ -180,8 +181,18 @@ async function start(): Promise<void> {
     },
   );
 
+  // ?debug: заметки с булавками и паузой — чтобы показать Claude место прямо в игре
+  const notes = location.search.includes('debug')
+    ? new DebugNotes(
+        (x, y) => office.container.toLocal({ x, y }),
+        (p) => office.container.toGlobal(p),
+        (p) => office.roomAt(p.x, p.y)?.id ?? 'коридор',
+      )
+    : null;
+
   camera.onTap = (x, y) => {
     unlockAudio();
+    if (notes?.handleTap(x, y)) return;
     if (tutorial.active) return;
     const local = office.container.toLocal({ x, y });
     const def = office.roomAt(local.x, local.y);
@@ -319,10 +330,12 @@ async function start(): Promise<void> {
     const dt = Math.min(ticker.deltaMS / 1000, 1);
     // ошибка в одном кадре не должна останавливать игру целиком
     try {
-      if (document.visibilityState !== 'hidden') game.tick(dt, !tutorial.active);
-      office.update(dt, game.isAvral() ? 2.5 : 1);
+      const paused = notes?.paused ?? false;
+      if (document.visibilityState !== 'hidden' && !paused) game.tick(dt, !tutorial.active);
+      if (!paused) office.update(dt, game.isAvral() ? 2.5 : 1);
       camera.update(dt);
-      fx.update(dt);
+      if (!paused) fx.update(dt);
+      notes?.update();
       hud.update(performance.now());
       document.body.classList.toggle('avral', game.isAvral());
     } catch (err) {
