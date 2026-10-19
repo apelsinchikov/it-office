@@ -138,7 +138,7 @@ class DeskView {
     const chairT = Math.max(0, this.tier('chair'));
     const monT = this.tier('monitor') >= 0 ? this.tier('monitor') : deskT;
     const keyT = this.tier('keyboard') >= 0 ? this.tier('keyboard') : deskT;
-    // порядок рисования — от дальнего к ближнему: стул, сотрудник, монитор (стоит у дальнего края), стол, клавиатура, руки
+    // порядок рисования — от дальнего к ближнему: стул, сотрудник, стол, клавиатура, руки, монитор
     this.scene.addChild(chairBack(chairT));
     this.char = new Character(this.look, rng, true);
     const seat = deskPt(SPOT.seat[0], SPOT.seat[1]);
@@ -149,7 +149,6 @@ class DeskView {
     // ящик сисадмина стоит под столом — рисуем до столешницы
     if (post) this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     this.scene.addChild(deskSlab(deskT));
-    this.scene.addChild(monitor(monT));
     this.scene.addChild(keyboard(keyT));
     const sleeve = sleeveOf(this.look);
     const kl = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] + 10, DESK.H + 2);
@@ -157,6 +156,8 @@ class DeskView {
     // предплечья от локтей у края стола до клавиатуры
     this.hands = [typingHand(kl[0] - 14, kl[1] - 9, kl[0], kl[1], sleeve, this.look.skin), typingHand(kr[0] - 13, kr[1] - 12, kr[0], kr[1], sleeve, this.look.skin)];
     this.scene.addChild(...this.hands);
+    // монитор дальше от сотрудника, чем клавиатура и руки, — рисуем после них
+    this.scene.addChild(monitor(monT));
     this.code = codeLines(monT);
     // addChild() без аргументов в Pixi 8 падает — пустой список не передаём
     if (this.code.length) this.scene.addChild(...this.code);
