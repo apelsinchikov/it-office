@@ -7,7 +7,9 @@ import { directorTick } from './game/director';
 import { eventIdAt, eventMod } from './game/events';
 import { Game } from './game/game';
 import { claimableCount, ensureDaily } from './game/quests';
+import { fetchResetBefore } from './game/resets';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
+import { newState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
@@ -24,7 +26,15 @@ const OFFLINE_MIN_SEC = 60;
 
 async function start(): Promise<void> {
   const tg = initTelegram();
-  const state = loadLocal();
+  let state = loadLocal();
+  // сброс конкретного игрока по списку public/resets.json (один раз: новое сохранение моложе отметки)
+  const resetAt = await fetchResetBefore(tg.user, `${import.meta.env.BASE_URL}resets.json`);
+  const wasReset = resetAt > 0 && state.createdAt < resetAt;
+  if (wasReset) {
+    state = newState();
+    clearLocal();
+    saveLocal(state);
+  }
   setLang(state.settings.lang ?? detectLang(tg.user?.language_code));
   setSound(state.settings.sound);
 
@@ -205,6 +215,12 @@ async function start(): Promise<void> {
 
   // сохранение в Telegram: если там прогресс дальше — берём его
   void loadCloud().then((cloud) => {
+    // облачное сохранение старше отметки сброса — устарело, перезаписываем его новым
+    if (cloud && resetAt > 0 && cloud.createdAt < resetAt) {
+      void saveCloud(game.state);
+      return;
+    }
+    if (wasReset) void saveCloud(game.state);
     if (cloud && better(game.state, cloud) === cloud) {
       saveLocal(cloud);
       location.reload();

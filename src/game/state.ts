@@ -151,6 +151,7 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
     base.run.coins = num(r.coins);
     base.totalEarned = num(r.lifetime);
     base.lastSeen = num(r.savedAt, now);
+    base.createdAt = 0;
     return base;
   }
   if (r.v !== 2 && r.v !== 3) return null;
@@ -217,7 +218,8 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
   out.phrasesSeen = Array.isArray(s.phrasesSeen) ? s.phrasesSeen.filter((x) => typeof x === 'string') : [];
   out.settings = { ...base.settings, ...(s.settings ?? {}) };
   out.lastSeen = num(s.lastSeen, now);
-  out.createdAt = num(s.createdAt, now);
+  // нет даты — считаем сохранение старым (важно для сброса по списку public/resets.json)
+  out.createdAt = num(s.createdAt, 0);
   return out;
 }
 

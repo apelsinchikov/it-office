@@ -15,6 +15,7 @@ import {
 } from './economy';
 import { acceptTask, directorTick, perkPower, tickPerks, usePerk } from './director';
 import { eventIdAt } from './events';
+import { resetBefore } from './resets';
 import { formatNumber } from './format';
 import { Game } from './game';
 import { claimDaily, ensureDaily, pickDaily } from './quests';
@@ -264,5 +265,18 @@ describe('директор IT', () => {
     expect(directorTick(g, 301_000, () => 0)).toBe('expired');
     expect(g.state.director.task).toBe(null);
     expect(Object.keys(g.state.director.inventory).length).toBe(0);
+  });
+});
+
+describe('сброс отдельного игрока', () => {
+  it('берётся самая поздняя отметка своего хеша, чужие не действуют', () => {
+    const rules = [
+      { h: 'aa', before: '2026-10-19T13:40:00Z' },
+      { h: 'bb', before: '2026-10-20T00:00:00Z' },
+      { h: 'aa', before: 'не дата' },
+    ];
+    expect(resetBefore(rules, ['aa'])).toBe(Date.parse('2026-10-19T13:40:00Z'));
+    expect(resetBefore(rules, ['cc'])).toBe(0);
+    expect(resetBefore(rules, [])).toBe(0);
   });
 });

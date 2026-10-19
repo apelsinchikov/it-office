@@ -24,6 +24,7 @@ TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс пове
 | `src/game/game.ts` | класс `Game`: состояние забега, покупки, тики, события `GameEvent` | все игровые |
 | `src/game/state.ts` | схема сохранения v3, `newState`, `normalize` (миграции v1/v2) | saves |
 | `src/game/save.ts` | localStorage + Telegram CloudStorage | saves |
+| `src/game/resets.ts`, `public/resets.json`, `scripts/reset-player.mjs` | сброс отдельного игрока по списку | saves |
 | `src/game/director.ts` | задания директора IT, перки, инвентарь | director |
 | `src/game/advisor.ts` | «Быстрее окупится»: лучшая покупка по окупаемости | hud |
 | `src/game/quests.ts` | ежедневные, цепочка, долгие задания | quests |
