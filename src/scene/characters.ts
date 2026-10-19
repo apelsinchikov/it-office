@@ -561,12 +561,13 @@ export class Character {
     }
     if (this.mugC) this.mugC.visible = prop === 'mug';
     if (this.padG) this.padG.visible = prop === 'pad';
-    // рука с кружкой — поверх туловища (обычно руки за ним), иначе кружку не видно
     const bob = this.front.bob;
     const arm = this.front.armR;
     if (this.armIdx < 0) this.armIdx = bob.getChildIndex(arm);
     bob.removeChild(arm);
-    bob.addChildAt(arm, prop === 'mug' ? bob.getChildIndex(this.front.head) : Math.min(this.armIdx, bob.children.length));
+    // с кружкой рука поверх головы: кружка подносится ко рту перед лицом, а не за затылком
+    if (prop === 'mug') bob.addChild(arm);
+    else bob.addChildAt(arm, Math.min(this.armIdx, bob.children.length));
   }
 
   /** Спрятать свои руки (за столом их рисует рабочее место — руки на клавиатуре). */
@@ -643,7 +644,7 @@ export class Character {
         const sip = cyc < 1.5 ? Math.sin((cyc / 1.5) * Math.PI) : 0;
         r.armR.rotation = 0.95 + 1.35 * sip;
         r.head.rotation = -6 * DEG * sip;
-        if (this.mugC) this.mugC.rotation = -r.armR.rotation - 0.5 * sip;
+        if (this.mugC) this.mugC.rotation = -r.armR.rotation + 0.35 * sip;
       } else if (this.mode === 'game') {
         // жмёт кнопки геймпада
         this.phase += dt * 9 * this.speed;

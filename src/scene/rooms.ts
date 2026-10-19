@@ -127,7 +127,8 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
   // стойка у стены этажа (под окнами) с кофемашиной и кружками
   const steam = new Graphics();
   {
-    const { c, g } = item(P.z(0.25, 0.18));
+    // длинные предметы сортируем по ближайшему к стене краю: кто стоит перед ними — рисуется поверх
+    const { c, g } = item(P.z(0.03, 0.18));
     P.shadow(g, 0.03, 0.25, 0.02, 0.18);
     P.box(g, 0.03, 0.25, 0.02, 0.18, 0, 28, 0xf0b46a, 0xc98545, 0xa96a33);
     P.panelV(g, 0.06, 0.22, 0.18, 6, 22, { fill: shade(0xc98545, -0.12), line: 2 });
@@ -174,7 +175,7 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     const u1 = 0.42;
     const v0 = 0.02;
     const v1 = 0.17;
-    const { c, g } = item(P.z(u1, v1));
+    const { c, g } = item(P.z(u0, v1));
     const t = tiers.fridge;
     const H = [48, 62, 74, 76][t] ?? 48;
     const body = t >= 3 ? [0xff5a5a, 0xe8173a, 0xb5121d] : t === 2 ? [0xe6e8f0, 0xc3c6d4, 0xd9dbe6] : [0xffffff, 0xf4f4f8, 0xe6e8f0];
@@ -225,7 +226,7 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     const g0 = item(-8.8e5);
     g0.c.addChild(glow);
     items.push(g0.c);
-    const { c, g } = item(P.z(0.82, 0.72));
+    const { c, g } = item(P.z(0.46, 0.72));
     P.shadow(g, 0.46, 0.82, 0.6, 0.72);
     P.box(g, 0.46, 0.82, 0.6, 0.72, 0, 18, 0x7d8398, 0x5a6078, 0x454b63);
     P.panelV(g, 0.5, 0.62, 0.72, 4, 14, { fill: 0x454b63, line: 2 });
@@ -278,7 +279,7 @@ export const SINKS_U = [0.58, 0.73, 0.88];
 
 export const TOILET_BLOCKS: Block[] = [
   [0, STALL_D + 0.02, 0, 1],
-  [0.5, 0.96, 0, 0.14],
+  [0.48, 0.98, 0, 0.17],
 ];
 
 /** Места: перед дверью каждой кабинки и перед каждой раковиной. */
@@ -333,7 +334,7 @@ export function buildToilet(def: RoomDef): Toilet {
   }
   // раковины на общей столешнице у стены v = 0 и зеркала над ними
   {
-    const { c, g } = item(P.z(0.96, 0.14));
+    const { c, g } = item(P.z(0.5, 0.14));
     P.shadow(g, 0.5, 0.96, 0.0, 0.14);
     P.box(g, 0.5, 0.96, 0.0, 0.14, 0, 26, 0xf4f4f8, 0xd9dbe6, 0xc3c6d4);
     for (const u of SINKS_U) {
