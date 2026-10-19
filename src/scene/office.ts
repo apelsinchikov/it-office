@@ -825,7 +825,9 @@ export class OfficeView {
       if (lock) lock.root.visible = lock.badge.visible = !this.game.roomOpen(id);
     }
     const dirOpen = this.game.roomOpen('director');
-    this.director.char.root.visible = dirOpen;
+    // сидящего за компьютером директора рисует стол; ходячего в это время не показываем — иначе их два
+    this.director.char.root.visible = dirOpen && !this.director.sitting;
+    if (this.dirSeat) this.dirSeat.root.visible = dirOpen && this.director.sitting;
     this.syncRest();
     this.syncDirectorDesk();
     this.syncHireMarks();

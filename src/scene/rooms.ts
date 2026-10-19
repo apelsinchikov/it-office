@@ -81,8 +81,8 @@ const item = (z: number): { c: Container; g: Graphics } => {
  */
 export const LOUNGE_BLOCKS: Block[] = [
   [0.0, 0.27, 0.0, 0.2], // стойка с кофемашиной
-  [0.26, 0.44, 0.0, 0.2], // холодильник
-  [0.47, 0.92, 0.0, 0.26], // диван
+  [0.25, 0.42, 0.0, 0.2], // холодильник
+  [0.53, 0.94, 0.0, 0.26], // диван
   [0.48, 0.88, 0.58, 0.74], // тумба с телевизором
   [0.02, 0.16, 0.8, 0.94], // растение
 ];
@@ -95,8 +95,8 @@ export const LOUNGE_SPOTS = {
     [0.17, 0.45, 1],
   ],
   sofa: [
-    [0.62, 0.15, 1],
-    [0.78, 0.15, 1],
+    [0.67, 0.15, 1],
+    [0.81, 0.15, 1],
   ],
   viewer: [0.4, 0.5, 0],
   fridge: [0.35, 0.28, 2],
@@ -171,8 +171,8 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
   const fridgeOpen = new Graphics();
   const fridgeClosed = new Graphics();
   {
-    const u0 = 0.28;
-    const u1 = 0.42;
+    const u0 = 0.27;
+    const u1 = 0.4;
     const v0 = 0.02;
     const v1 = 0.17;
     const { c, g } = item(P.z(u0, v1));
@@ -208,9 +208,10 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
   {
     const dark = shade(sofaColor, -0.22);
     const side = shade(sofaColor, -0.34);
-    const { c, g } = item(P.z(0.48, 0.04));
-    const u0 = 0.5;
-    const u1 = 0.9;
+    // между холодильником и диваном — заметный проход, чтобы высокий холодильник не наезжал на спинку
+    const { c, g } = item(P.z(0.54, 0.04));
+    const u0 = 0.56;
+    const u1 = 0.92;
     const v1 = 0.24;
     P.shadow(g, u0, u1, 0.0, v1);
     // основание на ножках-полозьях
