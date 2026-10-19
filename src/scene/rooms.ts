@@ -286,9 +286,13 @@ const stallV = (i: number): [number, number] => {
 /** Раковины: центры по u у стены v = 0; от крайней кабинки (u = 0,3) — проход не меньше 0,2. */
 export const SINKS_U = [0.58, 0.73, 0.88];
 
+/** Урна в ближнем углу у бортика. */
+const BIN: [number, number] = [0.8, 0.86];
+
 export const TOILET_BLOCKS: Block[] = [
   [0, STALL_D + 0.02, 0, 1],
   [0.48, 0.98, 0, 0.17],
+  [BIN[0] - 0.06, BIN[0] + 0.06, BIN[1] - 0.06, BIN[1] + 0.06],
 ];
 
 /** Места: перед дверью каждой кабинки и перед каждой раковиной. */
@@ -298,7 +302,7 @@ export function toiletSpots(): { stalls: [number, number][]; sinks: [number, num
       const [v0, v1] = stallV(i);
       return [STALL_D + 0.1, (v0 + v1) / 2] as [number, number];
     }),
-    sinks: SINKS_U.map((u) => [u, 0.24] as [number, number]),
+    sinks: SINKS_U.map((u) => [u, 0.27] as [number, number]),
   };
 }
 
@@ -360,6 +364,15 @@ export function buildToilet(def: RoomDef): Toilet {
       line(m.g, [...P.P(u - 0.03, 0, 42), ...P.P(u - 0.005, 0, 54)], 0xffffff, 2);
     }
     items.push(m.c);
+  }
+  // урна
+  {
+    const [bu, bv] = BIN;
+    const { c, g } = item(P.z(bu, bv));
+    P.shadow(g, bu - 0.035, bu + 0.035, bv - 0.035, bv + 0.035);
+    P.box(g, bu - 0.035, bu + 0.035, bv - 0.035, bv + 0.035, 0, 18, 0x9aa0b4, 0x7d8398, 0x5a6078, 2);
+    P.flat(g, bu - 0.025, bu + 0.025, bv - 0.025, bv + 0.025, { fill: 0x454b63, line: 0 }, 18.5);
+    items.push(c);
   }
   return { items, doors };
 }

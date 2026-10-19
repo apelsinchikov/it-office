@@ -669,8 +669,10 @@ export class OfficeView {
     label.anchor.set(0.5);
     // ось текста — вдоль ряда (вверх-вправо по экрану), «вниз» текста — к камере: буквы лежат в плоскости пола
     label.setFromMatrix(new Matrix(0.894, -0.447, 0.894, 0.447, 0, 0));
-    // в зоне отдыха надпись ниже по полу — чтобы диван у стены её не закрывал
-    const lp = def.kind === 'rest' ? roomPoint(0.92, 0.62) : roomPoint(0.9, 0.5);
+    // в зоне отдыха и у директора надпись — у переднего левого края (вдоль u), как отметил игрок; у остальных — вдоль переднего ряда
+    const alongU = def.kind === 'rest' || def.kind === 'director';
+    if (alongU) label.setFromMatrix(new Matrix(0.894, 0.447, -0.894, 0.447, 0, 0));
+    const lp = def.kind === 'rest' ? roomPoint(0.4, 0.89) : def.kind === 'director' ? roomPoint(0.35, 0.91) : roomPoint(0.9, 0.5);
     label.position.set(ctr.x + lp.x, ctr.y + lp.y);
     label.alpha = 0.92;
     // слой надписей на полу: выше ковров и проводов, ниже мебели и людей
