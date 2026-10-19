@@ -88,6 +88,12 @@ export function initTelegram(): TelegramInfo {
       `&language_code=${encodeURIComponent(u.language_code || 'en')}`;
   }
 
+  // Debug: показываем initData и initDataUnsafe
+  const debugEl = document.createElement('div');
+  debugEl.style.cssText = 'position:fixed;top:60px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:10px monospace;padding:6px 8px;border-radius:6px;max-width:280px;overflow:hidden;pointer-events:none;line-height:1.4;';
+  document.body.appendChild(debugEl);
+  debugEl.textContent = `initData=${initData?.length || 0}\nuser=${JSON.stringify(tg.initDataUnsafe?.user)}`;
+
   return {
     insideTelegram: true,
     user: tg.initDataUnsafe.user,
