@@ -216,13 +216,7 @@ async function start(): Promise<void> {
   // Холст всегда по размеру экрана. В Telegram (сворачивание Mini App, долгое время в фоне, смена полного экрана)
   // событие resize у window иногда приходит в середине анимации или не приходит вовсе — тогда холст оставался
   // на полэкрана с чёрной полосой снизу. Сверяем размер сами: ResizeObserver, возврат в игру и раз в полсекунды.
-  // Debounce: Telegram SDK шлёт пачки событий (fullscreenChanged, safeAreaChanged, viewportChanged) —
-  // без debounce canvas перерисовывается 3 раза подряд, что вызывает "серое моргание".
-  let syncSizeTimer = 0;
   function syncSize(): void {
-    const now = Date.now();
-    if (now - syncSizeTimer < 500) return; // debounce: не чаще раза в 500мс
-    syncSizeTimer = now;
     const w = gameEl.clientWidth || window.innerWidth;
     const h = gameEl.clientHeight || window.innerHeight;
     if (w > 0 && h > 0 && (Math.abs(app.screen.width - w) > 0.5 || Math.abs(app.screen.height - h) > 0.5)) {
@@ -236,25 +230,11 @@ async function start(): Promise<void> {
 
   // Видеокарта может отобрать контекст WebGL, пока игра долго в фоне: экран становится чёрным.
   // Сохраняемся и перезапускаемся, когда контекст можно вернуть.
-  let contextLostCount = 0;
   app.canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
-    contextLostCount++;
-    console.warn(`[webgl] context lost #${contextLostCount} at`, new Date().toISOString());
     saveAll();
   });
-  app.canvas.addEventListener('webglcontextrestored', () => {
-    console.warn(`[webgl] context restored #${contextLostCount} at`, new Date().toISOString());
-    location.reload();
-  });
-  // Логгер: следим за перерисовкой canvas
-  const origResize = app.renderer.resize.bind(app.renderer);
-  let resizeCount = 0;
-  app.renderer.resize = (w, h) => {
-    resizeCount++;
-    console.warn(`[resize] #${resizeCount} to ${w}x${h} at`, new Date().toISOString());
-    origResize(w, h);
-  };
+  app.canvas.addEventListener('webglcontextrestored', () => location.reload());
 
   // ?debug — доступ к игре из консоли для проверки
   if (location.search.includes('debug'))
@@ -286,39 +266,36 @@ async function start(): Promise<void> {
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
 
   // при входе сверяем три копии: на устройстве, в Telegram CloudStorage и в Supabase — берём самую продвинутую
-  // Приоритет: Supabase (если данные свежие) > CloudStorage > localStorage
+  // Debug overlay: показывает что происходит с синхронизацией
+  const debugEl = document.createElement('div');
+  debugEl.style.cssText = 'position:fixed;top:60px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:10px monospace;padding:6px 8px;border-radius:6px;max-width:280px;overflow:hidden;pointer-events:none;line-height:1.4;';
+  document.body.appendChild(debugEl);
+  let debugLines: string[] = [];
+  const debugLog = (msg: string) => {
+    const t = new Date().toLocaleTimeString();
+    debugLines.push(`[${t}] ${msg}`);
+    if (debugLines.length > 12) debugLines.shift();
+    debugEl.textContent = debugLines.join('\n');
+  };
+
   void Promise.all([loadCloud(), loadRemote()]).then(async ([cloud, remote]) => {
+    debugLog(`cloud=${cloud ? 'ok' : 'null'} remote=${remote.state ? 'ok' : 'null'} fail=${remote.failed}`);
     // копии старше отметки сброса устарели и не возвращаются
     const fresh = (c: GameState | null): GameState | null => (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
     const cloudOk = fresh(cloud);
     const remoteOk = fresh(remote.state);
     const remoteStale = !!remote.state && !remoteOk;
-
-    let best: GameState;
-
-    if (remoteOk && !remote.failed) {
-      // Supabase есть и данные свежие — берём его как основу
-      // но если локальный прогресс значительно "дальше" (>10% по score) — локальный победит (защита от откатов)
-      const remoteScore = progressScore(remoteOk);
-      const localScore = progressScore(game.state);
-      if (localScore > remoteScore * 1.1) {
-        // локальный прогресс значительно лучше — используем его
-        best = better(better(game.state, cloudOk), remoteOk);
-      } else {
-        best = remoteOk;
-      }
-    } else {
-      // Supabase нет данных или недоступен — берём CloudStorage > localStorage
-      best = better(better(game.state, cloudOk), remoteOk);
-    }
-
+    const best = better(better(game.state, cloudOk), remoteOk);
+    debugLog(`localScore=${progressScore(game.state).toFixed(1)} cloudScore=${cloudOk ? progressScore(cloudOk).toFixed(1) : '—'} remoteScore=${remoteOk ? progressScore(remoteOk).toFixed(1) : '—'}`);
     if (best !== game.state) {
+      debugLog(`BEST DIFFERENT — reloading`);
       // прогресс дальше в другой копии: записываем его везде и перезапускаемся с ним
       saveLocal(best);
       await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
       location.reload();
       return;
     }
+    debugLog(`best == local — no reload`);
     if (wasReset || (cloud && !cloudOk)) void saveCloud(game.state);
     // первый вход после появления Supabase: текущий прогресс уходит на сервер
     if (!remote.failed) void saveRemote(game.state, wasReset || remoteStale);

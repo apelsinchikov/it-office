@@ -37,14 +37,13 @@ async function rpc<T>(fn: string, body: Record<string, unknown>, timeoutMs = 800
 }
 
 /** Сохранение с сервера; null — его нет или сервер недоступен (тогда `failed`). */
-export async function loadRemote(): Promise<{ state: GameState | null; saveCreatedAt: number; failed: boolean }> {
-  if (!remoteAvailable()) return { state: null, saveCreatedAt: 0, failed: true };
+export async function loadRemote(): Promise<{ state: GameState | null; failed: boolean }> {
+  if (!remoteAvailable()) return { state: null, failed: true };
   try {
-    const raw = await rpc<{ state: unknown; save_created_at: number }>('load_progress', {});
-    if (!raw || !raw.state) return { state: null, saveCreatedAt: 0, failed: false };
-    return { state: normalize(raw.state), saveCreatedAt: raw.save_created_at, failed: false };
+    const raw = await rpc<unknown>('load_progress', {});
+    return { state: raw ? normalize(raw) : null, failed: false };
   } catch {
-    return { state: null, saveCreatedAt: 0, failed: true };
+    return { state: null, failed: true };
   }
 }
 
