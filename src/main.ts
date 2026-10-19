@@ -11,7 +11,7 @@ import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
 import { loadRemote, saveRemote, setRemoteAuth } from './game/remote';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
-import { newState, type GameState } from './game/state';
+import { newState, progressScore, type GameState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import * as charactersM from './scene/characters';
@@ -266,13 +266,32 @@ async function start(): Promise<void> {
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
 
   // при входе сверяем три копии: на устройстве, в Telegram CloudStorage и в Supabase — берём самую продвинутую
+  // Приоритет: Supabase (если данные свежие) > CloudStorage > localStorage
   void Promise.all([loadCloud(), loadRemote()]).then(async ([cloud, remote]) => {
     // копии старше отметки сброса устарели и не возвращаются
     const fresh = (c: GameState | null): GameState | null => (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
     const cloudOk = fresh(cloud);
     const remoteOk = fresh(remote.state);
     const remoteStale = !!remote.state && !remoteOk;
-    const best = better(better(game.state, cloudOk), remoteOk);
+
+    let best: GameState;
+
+    if (remoteOk && !remote.failed) {
+      // Supabase есть и данные свежие — берём его как основу
+      // но если локальный прогресс значительно "дальше" (>10% по score) — локальный победит (защита от откатов)
+      const remoteScore = progressScore(remoteOk);
+      const localScore = progressScore(game.state);
+      if (localScore > remoteScore * 1.1) {
+        // локальный прогресс значительно лучше — используем его
+        best = better(better(game.state, cloudOk), remoteOk);
+      } else {
+        best = remoteOk;
+      }
+    } else {
+      // Supabase нет данных или недоступен — берём CloudStorage > localStorage
+      best = better(better(game.state, cloudOk), remoteOk);
+    }
+
     if (best !== game.state) {
       // прогресс дальше в другой копии: записываем его везде и перезапускаемся с ним
       saveLocal(best);

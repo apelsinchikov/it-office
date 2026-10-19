@@ -115,6 +115,7 @@ $$;
 -- ---------- функции для игры ----------
 
 -- Сохранение игрока (или null, если его ещё нет). Заодно обновляет имя из Telegram.
+-- Возвращает jsonb: { state: ..., save_created_at: ... } или null, если игрока нет.
 create or replace function public.load_progress(init_data text)
 returns jsonb
 language plpgsql
@@ -125,14 +126,18 @@ declare
   u jsonb := game.verify_init_data(init_data);
   uid bigint := (u ->> 'id')::bigint;
   st jsonb;
+  ca bigint;
 begin
   update game.players
      set first_name = coalesce(u ->> 'first_name', ''),
          last_name = coalesce(u ->> 'last_name', ''),
          username = u ->> 'username'
-   where telegram_id = uid
-  returning state into st;
-  return st;
+    where telegram_id = uid
+   returning state, save_created_at into st, ca;
+  if st is null then
+    return null;
+  end if;
+  return jsonb_build_object('state', st, 'save_created_at', coalesce(ca, 0));
 end;
 $$;
 
