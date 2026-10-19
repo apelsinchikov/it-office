@@ -87,9 +87,18 @@ export function initTelegram(): TelegramInfo {
       `&language_code=${encodeURIComponent(u.language_code || 'en')}`;
   }
 
+  // Извлечём telegram_id: сначала из initDataUnsafe, потом из initData (парсинг id=...)
+  let user = tg.initDataUnsafe.user;
+  if (!user && initData) {
+    const m = initData.match(/id=(\d+)/);
+    if (m) {
+      user = { id: parseInt(m[1], 10), first_name: '' };
+    }
+  }
+
   return {
     insideTelegram: true,
-    user: tg.initDataUnsafe.user,
+    user,
     initData,
     platform: tg.platform,
   };
