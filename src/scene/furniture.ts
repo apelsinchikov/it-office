@@ -1,8 +1,37 @@
 // Мебель в стиле Б. Рабочее место рисуется в координатах «сцены стола» 260×210
-// (как на холсте): пол под столом — точка (130, 160).
+// (как на холсте): пол под центром стола — точка (130, 160).
 
 import { Container, Graphics } from 'pixi.js';
-import { OUT, circle, ellipse, isoBox, line, p, poly, rect, stroke } from './draw';
+import { OUT, circle, ellipse, isoBox, line, p, poly, rect, shade, stroke } from './draw';
+
+// ---------- рабочее место ----------
+// Всё рабочее место строится в локальных изо-координатах стола: a — от сотрудника к камере (вниз-вправо),
+// b — вдоль длинной стороны стола (вниз-влево), h — высота. Так предметы стоят на столешнице, а не «висят»,
+// и их легко разнести, чтобы ничего не пересекалось. Сотрудник сидит за дальним длинным краем (a < −DESK.A)
+// лицом к камере (вниз-вправо), монитор повёрнут экраном к нему — камера видит его заднюю крышку.
+
+/** Размеры стола: полуглубина A, полудлина B, высота столешницы H, толщина T. */
+export const DESK = { A: 30, B: 62, H: 58, T: 10 };
+
+/** Точка стола → координаты сцены стола (центр стола на полу — (130, 160)). */
+export function deskPt(a: number, b: number, h = 0): [number, number] {
+  return [130 + (a - b), 160 + (a + b) / 2 - h];
+}
+
+const flat = (...pts: [number, number][]): number[] => pts.flat();
+
+/** Где что стоит на столе (a, b). Подобрано так, чтобы предметы не пересекались и не закрывали лицо. */
+export const SPOT = {
+  /** Сотрудник (точка на полу под ним). */
+  seat: [-46, 0] as const,
+  keyboard: [-15, 0] as const,
+  monitor: [-24, -26] as const,
+  lamp: [-24, -54] as const,
+  mouse: [-15, 30] as const,
+  phone: [6, 44] as const,
+  mug: [12, 16] as const,
+  flower: [14, -46] as const,
+};
 
 interface Slab {
   top: number;
@@ -18,120 +47,121 @@ const DESK_TIERS: Slab[] = [
   { top: 0x4b5270, left: 0x3b3f55, right: 0x2f3344, legs: 0x262338 },
 ];
 
-/** Спинка стула за сидящим сотрудником. */
+/** Спинка стула за сидящим сотрудником: панель вдоль стола позади него. */
 export function chairBack(tier: number): Graphics {
   const g = new Graphics();
-  switch (tier) {
-    case 0:
-      rect(g, 136, 52, 28, 34, 4, 0x9aa0b4);
-      break;
-    case 1:
-      rect(g, 128, 34, 44, 58, 6, 0xc98545);
-      line(g, [134, 46, 166, 46], 0xa96a33, 3);
-      break;
-    case 2:
-      rect(g, 122, 26, 56, 68, 16, 0x5a6078);
-      break;
-    default:
-      rect(g, 120, 6, 60, 88, 14, 0x262338);
-      rect(g, 130, 12, 9, 78, 3, { fill: 0xe8173a, line: 2 });
-      rect(g, 161, 12, 9, 78, 3, { fill: 0xe8173a, line: 2 });
-      rect(g, 138, 12, 24, 10, 5, { fill: 0xffffff, line: 2 });
+  const a = SPOT.seat[0] - 16;
+  const w = [20, 22, 25, 27][tier] ?? 20;
+  const h0 = DESK.H - 22;
+  const hb = [46, 58, 70, 84][tier] ?? 46;
+  const col = [0x9aa0b4, 0xc98545, 0x5a6078, 0x262338][tier] ?? 0x9aa0b4;
+  // ножка-стойка и крестовина
+  const f = deskPt(a + 6, 0, 0);
+  const s = deskPt(a + 6, 0, h0);
+  rect(g, f[0] - 3, s[1], 6, f[1] - s[1], 0, 0x5a6078);
+  ellipse(g, f[0], f[1], 18, 7, { fill: 0x454b63, line: 2 });
+  // торец спинки (толщина) и сама спинка
+  poly(g, flat(deskPt(a, w, h0), deskPt(a + 5, w, h0), deskPt(a + 5, w, h0 + hb), deskPt(a, w, h0 + hb)), shade(col, -0.25));
+  poly(g, flat(deskPt(a + 5, -w, h0), deskPt(a + 5, w, h0), deskPt(a + 5, w, h0 + hb), deskPt(a + 5, -w, h0 + hb)), col);
+  if (tier === 1) line(g, [...deskPt(a + 5, -w + 4, h0 + hb - 12), ...deskPt(a + 5, w - 4, h0 + hb - 12)], 0xa96a33, 3);
+  if (tier >= 3) {
+    // игровое кресло: красные полосы и подголовник
+    for (const bb of [-w + 7, w - 7]) {
+      poly(g, flat(deskPt(a + 5, bb - 3, h0 + 4), deskPt(a + 5, bb + 3, h0 + 4), deskPt(a + 5, bb + 3, h0 + hb - 4), deskPt(a + 5, bb - 3, h0 + hb - 4)), { fill: 0xe8173a, line: 2 });
+    }
+    poly(g, flat(deskPt(a + 5, -8, h0 + hb - 14), deskPt(a + 5, 8, h0 + hb - 14), deskPt(a + 5, 8, h0 + hb - 6), deskPt(a + 5, -8, h0 + hb - 6)), { fill: 0xffffff, line: 2 });
   }
   return g;
 }
 
-/** Стол: ножки, боковины, столешница. */
+/** Стол: ножки, два видимых торца, столешница. */
 export function deskSlab(tier: number): Graphics {
   const s = DESK_TIERS[Math.max(0, Math.min(3, tier))];
+  const { A, B, H, T } = DESK;
   const g = new Graphics();
-  ellipse(g, 130, 168, 96, 22, { fill: OUT, alpha: 0.14, line: 0 });
-  rect(g, 47, 110, 7, 52, 0, s.legs);
-  rect(g, 206, 110, 7, 52, 0, s.legs);
-  rect(g, 126.5, 152, 7, 42, 0, s.legs);
-  poly(g, [46, 100, 130, 142, 130, 156, 46, 114], s.left);
-  poly(g, [130, 142, 214, 100, 214, 114, 130, 156], s.right);
-  poly(g, [130, 58, 214, 100, 130, 142, 46, 100], s.top);
-  if (tier === 2) {
-    poly(g, [150, 152, 196, 129, 196, 158, 150, 181], 0xe6e8f0);
-    line(g, [160, 160, 186, 147], OUT, 2.5);
+  const c = deskPt(0, 0, 0);
+  ellipse(g, c[0], c[1] + 4, A + B + 6, (A + B) / 2.7, { fill: OUT, alpha: 0.14, line: 0 });
+  for (const [a, b] of [
+    [A - 5, -B + 5],
+    [A - 5, B - 5],
+    [-A + 5, B - 5],
+  ]) {
+    const t = deskPt(a, b, H - T);
+    const f = deskPt(a, b, 0);
+    rect(g, t[0] - 3.5, t[1], 7, f[1] - t[1], 0, s.legs);
   }
-  if (tier >= 3) line(g, [48, 114, 130, 155, 212, 114], 0x2fbfae, 3);
+  poly(g, flat(deskPt(A, -B, H), deskPt(A, B, H), deskPt(A, B, H - T), deskPt(A, -B, H - T)), s.right);
+  poly(g, flat(deskPt(-A, B, H), deskPt(A, B, H), deskPt(A, B, H - T), deskPt(-A, B, H - T)), s.left);
+  poly(g, flat(deskPt(-A, -B, H), deskPt(A, -B, H), deskPt(A, B, H), deskPt(-A, B, H)), s.top);
+  if (tier === 2) {
+    // тумба с ящиком под столешницей справа
+    poly(g, flat(deskPt(A, -B + 6, H - T), deskPt(A, -B + 40, H - T), deskPt(A, -B + 40, 6), deskPt(A, -B + 6, 6)), 0xe6e8f0);
+    line(g, [...deskPt(A, -B + 16, H - T - 14), ...deskPt(A, -B + 30, H - T - 14)], OUT, 2.5);
+  }
+  if (tier >= 3) line(g, [...deskPt(-A, B, H - T), ...deskPt(A, B, H - T), ...deskPt(A, -B, H - T)], 0x2fbfae, 3);
   return g;
 }
 
-/** Монитор на столе (задняя левая часть). */
+/** Монитор экраном к сотруднику: камера видит заднюю крышку и подставку. */
 export function monitor(tier: number): Graphics {
   const g = new Graphics();
-  switch (tier) {
-    case 0:
-      poly(g, [62, 64, 88, 77, 88, 103, 62, 90], 0xd6c7a3);
-      poly(g, [88, 77, 106, 68, 106, 94, 88, 103], 0xc4b38c);
-      poly(g, [62, 64, 80, 55, 106, 68, 88, 77], 0xefe4c8);
-      poly(g, [66, 70, 84, 79, 84, 97, 66, 88], 0x8ee3ff);
-      break;
-    case 1:
-      rect(g, 86, 74, 6, 14, 0, OUT);
-      poly(g, [70, 84, 106, 66, 106, 42, 70, 60], OUT);
-      poly(g, [73, 79, 103, 64, 103, 45, 73, 60], { fill: 0x8ee3ff, line: 1.5 });
-      break;
-    case 2:
-      rect(g, 86, 72, 6, 14, 0, OUT);
-      poly(g, [66, 86, 112, 63, 112, 31, 66, 54], OUT);
-      poly(g, [70, 80, 108, 61, 108, 35, 70, 54], { fill: 0x8ee3ff, line: 1.5 });
-      break;
-    default:
-      rect(g, 84, 76, 8, 12, 0, OUT);
-      poly(g, [52, 94, 116, 62, 116, 22, 52, 54], OUT);
-      poly(g, [56, 88, 112, 60, 112, 26, 56, 54], { fill: 0x8b6cff, line: 1.5 });
-      poly(g, [84, 74, 112, 60, 112, 26, 84, 40], { fill: 0x8ee3ff, line: 0 });
+  const [a, b] = SPOT.monitor;
+  const H = DESK.H;
+  const base = deskPt(a, b, H);
+  if (tier === 0) {
+    // старый ЭЛТ-монитор: коробка
+    const w = 13;
+    poly(g, flat(deskPt(a - 4, b - w, H), deskPt(a - 4, b + w, H), deskPt(a - 4, b + w, H + 24), deskPt(a - 4, b - w, H + 24)), 0xd6c7a3);
+    poly(g, flat(deskPt(a - 4, b + w, H), deskPt(a + 8, b + w, H), deskPt(a + 8, b + w, H + 24), deskPt(a - 4, b + w, H + 24)), 0xc4b38c);
+    poly(g, flat(deskPt(a - 4, b - w, H + 24), deskPt(a + 8, b - w, H + 24), deskPt(a + 8, b + w, H + 24), deskPt(a - 4, b + w, H + 24)), 0xefe4c8);
+    return g;
   }
+  const w = [0, 15, 18, 21][tier];
+  const h = [0, 22, 25, 28][tier];
+  const z = H + 10;
+  ellipse(g, base[0], base[1], 9, 4, 0x454b63);
+  rect(g, base[0] - 2.5, base[1] - 12, 5, 12, 0, OUT);
+  const body = tier === 3 ? 0x2f3344 : tier === 2 ? 0xd9dbe6 : 0x5a6078;
+  // торец (толщина) справа-снизу, потом задняя крышка
+  poly(g, flat(deskPt(a, b + w, z), deskPt(a + 3, b + w, z), deskPt(a + 3, b + w, z + h), deskPt(a, b + w, z + h)), OUT);
+  poly(g, flat(deskPt(a + 3, b - w, z), deskPt(a + 3, b + w, z), deskPt(a + 3, b + w, z + h), deskPt(a + 3, b - w, z + h)), body);
+  const logo = deskPt(a + 3, b, z + h / 2);
+  circle(g, logo[0], logo[1], 2, { fill: tier === 3 ? 0x8b6cff : 0xffffff, alpha: 0.8, line: 0 });
+  if (tier === 3) line(g, [...deskPt(a + 3, b - w, z), ...deskPt(a + 3, b + w, z)], 0x8b6cff, 3);
   return g;
 }
 
-/** Три «строчки кода» на экране — их масштаб анимирует сцена. */
-export function codeLines(tier: number): Container[] {
-  const lines: [number, number, number, number][] =
-    tier === 0
-      ? [
-          [69, 78, 79, 83],
-          [69, 84, 81, 90],
-        ]
-      : tier === 1
-        ? [
-            [77, 64, 92, 56],
-            [77, 70, 98, 59],
-            [80, 75, 94, 68],
-          ]
-        : [
-            [76, 60, 94, 51],
-            [76, 67, 100, 55],
-            [80, 72, 96, 64],
-          ];
-  return lines.map(([x1, y1, x2, y2]) => {
-    const c = new Container();
-    const g = new Graphics();
-    line(g, [0, 0, x2 - x1, y2 - y1], tier >= 3 ? 0xffffff : 0x1d6f99, 2.5);
-    c.addChild(g);
-    c.position.set(x1, y1);
-    return c;
-  });
+/** Строчки кода раньше бежали по экрану; теперь экран повёрнут к сотруднику — анимировать нечего. */
+export function codeLines(_tier: number): Container[] {
+  return [];
 }
 
 const KEYS = [0x9aa0b4, 0x454b63, 0xf4f4f8, 0x262338];
 
+/** Клавиатура перед сотрудником: длинная сторона вдоль стола. */
 export function keyboard(tier: number): Graphics {
   const g = new Graphics();
-  poly(g, [138, 80, 166, 94, 158, 99, 130, 85], KEYS[tier]);
-  if (tier >= 3) line(g, [131, 86, 158, 100], 0xff5fa2, 2);
+  const [a, b] = SPOT.keyboard;
+  const H = DESK.H + 1;
+  const w = 24;
+  const d = 7;
+  poly(g, flat(deskPt(a - d, b - w, H), deskPt(a + d, b - w, H), deskPt(a + d, b + w, H), deskPt(a - d, b + w, H)), KEYS[tier]);
+  for (let i = -2; i <= 2; i++) {
+    const p1 = deskPt(a - d + 3, b + i * 8, H);
+    const p2 = deskPt(a + d - 3, b + i * 8, H);
+    line(g, [...p1, ...p2], tier === 2 ? 0xc3c6d4 : 0x262338, 1);
+  }
+  if (tier >= 3) line(g, [...deskPt(a + d, b - w, H), ...deskPt(a + d, b + w, H)], 0xff5fa2, 2);
   return g;
 }
 
 export function mouse(tier: number): Graphics {
   const g = new Graphics();
-  stroke(g, 'M166 96 Q172 92 178 94', OUT, 1.5);
-  ellipse(g, 176, 98, 6, 4, KEYS[tier]);
-  if (tier >= 3) circle(g, 176, 97, 1.5, { fill: 0x2fbfae, line: 0 });
+  const [a, b] = SPOT.mouse;
+  const c = deskPt(a, b, DESK.H + 2);
+  ellipse(g, c[0] + 4, c[1] + 2, 10, 5, { fill: OUT, alpha: 0.15, line: 0 });
+  ellipse(g, c[0], c[1], 6, 4, KEYS[tier]);
+  if (tier >= 3) circle(g, c[0], c[1] - 1, 1.5, { fill: 0x2fbfae, line: 0 });
   return g;
 }
 
@@ -139,30 +169,43 @@ const PHONES = [0xe8dcc0, 0x262338, 0xf4f4f8, 0xffd23f];
 
 export function phone(tier: number): Graphics {
   const g = new Graphics();
-  isoBox(g, 192, 104, 12, 6, PHONES[tier], tier === 1 ? 0x3b3f55 : 0xd6c7a3, tier === 1 ? 0x2f3344 : 0xc4b38c, 2.5);
-  stroke(g, 'M182 94 Q192 88 202 98', OUT, 6);
-  stroke(g, 'M182 94 Q192 88 202 98', tier === 3 ? 0xe8173a : PHONES[tier], 3);
+  const c = deskPt(SPOT.phone[0], SPOT.phone[1], DESK.H);
+  isoBox(g, c[0], c[1], 12, 6, PHONES[tier], tier === 1 ? 0x3b3f55 : 0xd6c7a3, tier === 1 ? 0x2f3344 : 0xc4b38c, 2.5);
+  stroke(g, `M${c[0] - 10} ${c[1] - 10} Q${c[0]} ${c[1] - 16} ${c[0] + 10} ${c[1] - 6}`, OUT, 6);
+  stroke(g, `M${c[0] - 10} ${c[1] - 10} Q${c[0]} ${c[1] - 16} ${c[0] + 10} ${c[1] - 6}`, tier === 3 ? 0xe8173a : PHONES[tier], 3);
   return g;
 }
 
 /** Цветок в горшке на столе. */
 export function flower(): Container {
   const g = new Container();
-  for (const [cx, cy, rot, c] of [
-    [94, 97, -0.44, 0x3ccf63],
-    [102, 96, 0.35, 0x3ccf63],
-    [98, 92, 0, 0x5be07f],
+  const [x, y] = deskPt(SPOT.flower[0], SPOT.flower[1], DESK.H);
+  for (const [dx, dy, rot, c] of [
+    [-4, -22, -0.44, 0x3ccf63],
+    [4, -23, 0.35, 0x3ccf63],
+    [0, -27, 0, 0x5be07f],
   ] as const) {
     const leaf = new Graphics();
     ellipse(leaf, 0, 0, 4, 9.5, c);
     leaf.rotation = rot;
-    leaf.position.set(cx, cy);
+    leaf.position.set(x + dx, y + dy);
     g.addChild(leaf);
   }
   const pot = new Graphics();
-  poly(pot, [90, 106, 106, 106, 104, 119, 92, 119], 0xff7a45);
+  poly(pot, [x - 8, y - 13, x + 8, y - 13, x + 6, y, x - 6, y], 0xff7a45);
   g.addChild(pot);
   return g;
+}
+
+/** Предплечье с кистью: от плеча (x0, y0) к клавише (x1, y1). */
+export function typingHand(x0: number, y0: number, x1: number, y1: number, sleeve: number, skin: number): Container {
+  const c = new Container();
+  const g = new Graphics();
+  line(g, [x0, y0, x1, y1], OUT, 11);
+  line(g, [x0, y0, x1, y1], sleeve, 6);
+  circle(g, x1, y1 + 1, 5, skin);
+  c.addChild(g);
+  return c;
 }
 
 /** Кружка; пар отдельно. */
@@ -179,23 +222,6 @@ export function steam(x: number, y: number): Graphics {
   const g = new Graphics();
   stroke(g, `M${x} ${y} Q${x - 3} ${y - 4} ${x} ${y - 8} Q${x + 3} ${y - 12} ${x} ${y - 16}`, 0xb9b6c8, 2);
   return g;
-}
-
-/** Руки, печатающие на клавиатуре (цвет рукава и кожи). */
-export function typingHand(side: 'L' | 'R', sleeve: number, skin: number): Container {
-  const c = new Container();
-  const g = new Graphics();
-  if (side === 'L') {
-    line(g, [137, 64, 139, 83], OUT, 11);
-    line(g, [137, 64, 139, 83], sleeve, 6);
-    circle(g, 139, 85, 5, skin);
-  } else {
-    line(g, [164, 64, 159, 91], OUT, 11);
-    line(g, [164, 64, 159, 91], sleeve, 6);
-    circle(g, 159, 93, 5, skin);
-  }
-  c.addChild(g);
-  return c;
 }
 
 // ---------- пост сисадмина (вместо стола) ----------

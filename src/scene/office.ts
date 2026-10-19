@@ -12,6 +12,9 @@ import {
   chairBack,
   codeLines,
   coffeeMachine,
+  DESK,
+  SPOT,
+  deskPt,
   deskSlab,
   directorDesk,
   flower,
@@ -137,40 +140,48 @@ class DeskView {
     const chairT = Math.max(0, this.tier('chair'));
     const monT = this.tier('monitor') >= 0 ? this.tier('monitor') : deskT;
     const keyT = this.tier('keyboard') >= 0 ? this.tier('keyboard') : deskT;
+    // порядок рисования — от дальнего к ближнему: стул, сотрудник, монитор (стоит у дальнего края), стол, клавиатура, руки
     this.scene.addChild(chairBack(chairT));
     this.char = new Character(this.look, rng, true);
-    this.char.root.position.set(150, 124.6);
+    const seat = deskPt(SPOT.seat[0], SPOT.seat[1]);
+    this.char.root.position.set(seat[0], seat[1]);
     this.char.root.scale.set(0.7);
+    this.char.turnFace(5); // смотрит вниз-вправо, на клавиатуру
     this.scene.addChild(this.char.root);
     this.scene.addChild(deskSlab(deskT));
+    this.scene.addChild(monitor(monT));
     this.scene.addChild(keyboard(keyT));
     const sleeve = sleeveOf(this.look);
-    this.hands = [typingHand('L', sleeve, this.look.skin), typingHand('R', sleeve, this.look.skin)];
+    const kl = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] + 10, DESK.H + 2);
+    const kr = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] - 10, DESK.H + 2);
+    this.hands = [typingHand(seat[0] - 10, seat[1] - 52, kl[0], kl[1], sleeve, this.look.skin), typingHand(seat[0] + 14, seat[1] - 56, kr[0], kr[1], sleeve, this.look.skin)];
     this.scene.addChild(...this.hands);
-    this.scene.addChild(monitor(monT));
     this.code = codeLines(monT);
     this.scene.addChild(...this.code);
     if (this.tier('phone') >= 0) this.scene.addChild(phone(this.tier('phone')));
     if (this.tier('mouse') >= 0) this.scene.addChild(mouse(this.tier('mouse')));
     if (post) {
-      // лампа справа на столе (нарисована в координатах поста 120×110, ×1,9)
+      // настольная лампа рядом с монитором (нарисована в координатах поста 120×110, ×1,9; основание — точка 24,54)
       const l = lamp(Math.max(0, this.tier('lamp')));
+      const at = deskPt(SPOT.lamp[0], SPOT.lamp[1], DESK.H);
       l.scale.set(1.9);
-      l.position.set(140, -11);
+      l.position.set(at[0] - 24 * 1.9, at[1] - 54 * 1.9);
       this.scene.addChild(l);
       this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     }
     if (this.single('flower')) this.scene.addChild(flower());
     if (this.single('mug')) {
-      this.scene.addChild(mug(post ? 104 : 166, post ? 108 : 104));
-      this.steamG = steam(post ? 110 : 172, post ? 104 : 100);
+      const m = deskPt(SPOT.mug[0], SPOT.mug[1], DESK.H);
+      this.scene.addChild(mug(m[0] - 6.5, m[1] - 14));
+      this.steamG = steam(m[0], m[1] - 18);
       this.scene.addChild(this.steamG);
     }
   }
 
   /** Точка над головой (для пузыря), в мире. */
   anchor(): Pt {
-    return { x: this.root.x + (150 - 130) * DESK_SCALE, y: this.root.y + (4 - 160) * DESK_SCALE };
+    const seat = deskPt(SPOT.seat[0], SPOT.seat[1]);
+    return { x: this.root.x + (seat[0] - 130) * DESK_SCALE, y: this.root.y + (seat[1] - 122 - 160) * DESK_SCALE };
   }
 
   /** Точка для тикета. */

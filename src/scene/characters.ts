@@ -520,6 +520,11 @@ export class Character {
     }
   }
 
+  /** Повернуть лицо на 3/4: глаза и рот сдвигаются в сторону взгляда (px в координатах рисунка). */
+  turnFace(px: number): void {
+    for (const c of [this.front.eyes, this.front.mouth]) if (c) c.x += px;
+  }
+
   private rig(): Rig {
     return this.dir >= 2 && this.back ? this.back : this.front;
   }
