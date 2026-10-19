@@ -5,7 +5,8 @@ import type { PhraseGroup } from '../game/phrases';
 import { Character, randomLook, type Dir, type Outfit } from './characters';
 import { P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
 
-const CELL = 1 / 12;
+/** Клетка сетки: 1/16 комнаты — в коридоре 3–4 клетки, хватает на отступы от стен и на обход. */
+const CELL = 1 / 16;
 export const CHAR_SCALE = 0.32;
 
 /** Сетка пола в изо-координатах: true — можно ходить. */
@@ -14,7 +15,7 @@ export class NavGrid {
   readonly min: number;
   private readonly open: Uint8Array;
 
-  constructor(blocked: (a: number, b: number) => boolean) {
+  constructor(private readonly blocked: (a: number, b: number) => boolean) {
     const f = floorBounds();
     this.min = f.min;
     this.n = Math.round((f.max - f.min) / CELL);
@@ -42,10 +43,12 @@ export class NavGrid {
     return [i, j];
   }
 
-  /** Можно ли стоять в этой точке мира. */
+  /** Можно ли стоять в этой точке мира (проверка самой точки, а не только клетки — чтобы обход не уводил на стену). */
   freeAt(p: Pt): boolean {
     const [i, j] = this.cellOf(p);
-    return this.isOpen(i, j);
+    if (!this.isOpen(i, j)) return false;
+    const { a, b } = worldToIso(p.x, p.y);
+    return !this.blocked(a, b);
   }
 
   isOpen(i: number, j: number): boolean {
@@ -122,17 +125,19 @@ export class NavGrid {
     return pts;
   }
 
-  /** Случайная открытая клетка; edge — у самого края этажа. */
+  /** Случайная открытая клетка; edge — ближайшая к краю этажа (с краю теперь отступ, поэтому ищем внутрь). */
   randomCell(rng: () => number, edge: boolean): Pt {
     for (let tries = 0; tries < 400; tries++) {
-      let i = Math.floor(rng() * this.n);
-      let j = Math.floor(rng() * this.n);
+      const i = Math.floor(rng() * this.n);
+      const j = Math.floor(rng() * this.n);
       if (edge) {
         const side = Math.floor(rng() * 4);
-        if (side === 0) i = 0;
-        else if (side === 1) i = this.n - 1;
-        else if (side === 2) j = 0;
-        else j = this.n - 1;
+        for (let d = 0; d < this.n / 4; d++) {
+          const ci = side === 0 ? d : side === 1 ? this.n - 1 - d : i;
+          const cj = side === 2 ? d : side === 3 ? this.n - 1 - d : j;
+          if (this.isOpen(ci, cj)) return this.world(ci, cj);
+        }
+        continue;
       }
       if (this.isOpen(i, j)) return this.world(i, j);
     }

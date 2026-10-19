@@ -66,6 +66,10 @@ const OUTFIT_BY_ID: Record<string, Outfit> = { sysadmins: 'sysadmin', support: '
 const outfitOf = (d: number): Outfit => OUTFIT_BY_ID[DEPTS[d].id] ?? 'dev';
 /** У сисадминов вместо стола — пост с сервером, сотрудник стоит. */
 const isPost = (d: number): boolean => DEPTS[d].id === 'sysadmins';
+/** Отступ прохожих от стен, в долях комнаты. */
+const WALK_MARGIN = 0.07;
+/** Половина прохода в бортике, в долях комнаты (проход — середина края от 0,36 до 0,64). */
+const DOOR_HALF = 0.12;
 /** Поле вокруг офиса (трава, деревья, дорожки), в пикселях мира. */
 const YARD = 520;
 
@@ -363,11 +367,26 @@ export class OfficeView {
   // ---------- статика: пол, стены, комнаты, мебель общих зон ----------
 
   private blocked(a: number, b: number): boolean {
+    // отступ от стен и края этажа: прохожие не ходят по самой линии стены
+    const M = WALK_MARGIN;
+    const f = floorBounds();
+    if (a < f.min + M || b < f.min + M || a > f.max - M || b > f.max - M) return true;
     for (const r of ROOMS) {
+      const ra = a - r.col * P;
+      const rb = b - r.row * P;
       const closed = (r.kind === 'rest' || r.kind === 'toilet') && !this.game.roomOpen(r.kind);
       if (r.kind === 'dept' || r.kind === 'director' || closed) {
-        if (Math.abs(a - r.col * P) <= 0.52 && Math.abs(b - r.row * P) <= 0.52) return true;
+        if (Math.abs(ra) <= 0.5 + M && Math.abs(rb) <= 0.5 + M) return true;
+        continue;
       }
+      if (r.kind === 'hall') continue;
+      // открытые отдых и туалет: полоса вдоль задних стен и бортиков, в бортиках — проход посередине
+      const alongA = Math.abs(rb) <= 0.5 + M;
+      const alongB = Math.abs(ra) <= 0.5 + M;
+      if (Math.abs(ra + 0.5) < M && alongA) return true;
+      if (Math.abs(rb + 0.5) < M && alongB) return true;
+      if (Math.abs(ra - 0.5) < M && alongA && Math.abs(rb) > DOOR_HALF) return true;
+      if (Math.abs(rb - 0.5) < M && alongB && Math.abs(ra) > DOOR_HALF) return true;
     }
     // мебель общих зон: квадраты в координатах комнаты (u, v, полуразмер)
     const items: [RoomDef['id'], number, number, number][] = [
@@ -393,6 +412,8 @@ export class OfficeView {
   private buildStatic(): void {
     for (const c of this.bg.removeChildren()) c.destroy({ children: true });
     for (const c of this.labels.removeChildren()) c.destroy({ children: true });
+    for (const w of this.wallSegs) w.destroy();
+    this.wallSegs = [];
     const th = this.theme;
     const f = floorBounds();
     this.bg.addChild(this.drawYard());
@@ -510,6 +531,35 @@ export class OfficeView {
     this.syncEventDecor();
   }
 
+  /** Куски стен в сортируемом слое мира (пересоздаются вместе со статикой). */
+  private wallSegs: Graphics[] = [];
+
+  /**
+   * Стена от (x0,y0) до (x1,y1) высотой h, нарезанная на короткие куски: у каждого свой zIndex по низу,
+   * поэтому прохожий за стеной закрыт ею, а перед стеной — виден целиком.
+   */
+  private wallPiece(x0: number, y0: number, x1: number, y1: number, h: number, color: number, w: number): void {
+    const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 24));
+    for (let i = 0; i < n; i++) {
+      const ax = x0 + ((x1 - x0) * i) / n;
+      const ay = y0 + ((y1 - y0) * i) / n;
+      const bx = x0 + ((x1 - x0) * (i + 1)) / n;
+      const by = y0 + ((y1 - y0) * (i + 1)) / n;
+      const g = new Graphics();
+      // заливка с запасом в полпикселя, чтобы между кусками не было щелей
+      const ex = ((bx - ax) / Math.hypot(bx - ax, by - ay)) * 0.5;
+      const ey = ((by - ay) / Math.hypot(bx - ax, by - ay)) * 0.5;
+      poly(g, [ax - ex, ay - ey, bx + ex, by + ey, bx + ex, by + ey - h, ax - ex, ay - ey - h], { fill: color, line: 0 });
+      line(g, [ax, ay - h, bx, by - h], OUT, w);
+      line(g, [ax, ay, bx, by], OUT, w * 0.7);
+      if (i === 0) line(g, [ax, ay, ax, ay - h], OUT, w);
+      if (i === n - 1) line(g, [bx, by, bx, by - h], OUT, w);
+      g.zIndex = (ay + by) / 2;
+      this.world.addChild(g);
+      this.wallSegs.push(g);
+    }
+  }
+
   private drawRoom(def: RoomDef): Container {
     const c = new Container();
     const th = this.theme;
@@ -526,8 +576,11 @@ export class OfficeView {
     const wall = def.kind === 'hall' ? 0 : WALL_H;
     // у края этажа своей стены нет: её роль играет стена этажа
     const outer = touchesOuter(def);
-    if (wall && !outer.left) poly(g, [-hw, 0, 0, -hh, 0, -hh - wall, -hw, -wall], shade(floor, -0.3));
-    if (wall && !outer.right) poly(g, [0, -hh, hw, 0, hw, -wall, 0, -hh - wall], shade(floor, -0.38));
+    // стены и бортики — в сортируемом слое мира: кто идёт за стеной, того она закрывает
+    const X = ctr.x;
+    const Y = ctr.y;
+    if (wall && !outer.left) this.wallPiece(X - hw, Y, X, Y - hh, wall, shade(floor, -0.3), 3);
+    if (wall && !outer.right) this.wallPiece(X, Y - hh, X + hw, Y, wall, shade(floor, -0.38), 3);
     poly(g, [0, -hh, hw, 0, 0, hh, -hw, 0], { fill: floor, line: 3 });
     if (wall) {
       // низкие бортики по ближним краям, посередине — проход
@@ -540,7 +593,7 @@ export class OfficeView {
           const ay = y0 + (y1 - y0) * t0;
           const bx = x0 + (x1 - x0) * t1;
           const by = y0 + (y1 - y0) * t1;
-          poly(g, [ax, ay, bx, by, bx, by - LEDGE_H, ax, ay - LEDGE_H], { fill: color, line: 2 });
+          this.wallPiece(X + ax, Y + ay, X + bx, Y + by, LEDGE_H, color, 2);
         }
       };
       ledge(-hw, 0, 0, hh, shade(floor, -0.18));
