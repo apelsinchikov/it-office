@@ -31,8 +31,8 @@ export const SPOT = {
   lamp: [-6, -52] as const,
   mouse: [-15, 30] as const,
   phone: [6, 44] as const,
-  mug: [-4, -32] as const,
-  flower: [14, -46] as const,
+  mug: [16, -32] as const,
+  flower: [16, -52] as const,
   /** Ящик с инструментами сисадмина — на полу под столом, слева. */
   toolbox: [4, 40] as const,
 };

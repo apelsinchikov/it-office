@@ -219,7 +219,7 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
   const glow = new Graphics();
   {
     P.flat(glow, 0.5, 0.78, 0.3, 0.55, { fill: 0x8ee3ff, alpha: 0.18, line: 0 });
-    const g0 = item(-8e5);
+    const g0 = item(-8.8e5);
     g0.c.addChild(glow);
     items.push(g0.c);
     const { c, g } = item(P.z(0.82, 0.72));
@@ -374,21 +374,22 @@ export function buildServerRoom(def: RoomDef, t: number): Container[] {
       [0.86, 0.1],
     ], 0xe8173a);
     P.wire(g, [
-      [0.08, 0.93],
-      [0.14, 0.92],
+      [0.51, 0.92],
+      [0.8, 0.92],
+      [0.82, 0.87],
     ], 0x3ccf63, 2.5);
     items.push(c);
   }
-  const rack = (u0: number, u1: number, v0: number, v1: number, h: number): void => {
+  /** Стойка; face — какая видимая грань смотрит в комнату (дверца с огоньками): 'u' — грань u = u1, 'v' — грань v = v1. */
+  const rack = (u0: number, u1: number, v0: number, v1: number, h: number, face: 'u' | 'v'): void => {
     const { c, g } = item(P.z(u1, v1));
     P.shadow(g, u0, u1, v0, v1);
     P.box(g, u0, u1, v0, v1, 0, h, 0x4b5270, 0x2f3344, 0x262338);
-    // огоньки на дверце (грань u = u1)
     const lights = new Container();
     for (let i = 0; i < 6; i++) {
       const l = new Graphics();
-      const [x0, y0] = P.P(u1, v0 + 0.015, h - 10 - i * 8);
-      const [x1, y1] = P.P(u1, v0 + 0.05, h - 10 - i * 8);
+      const [x0, y0] = face === 'u' ? P.P(u1, v0 + 0.015, h - 10 - i * 8) : P.P(u0 + 0.015, v1, h - 10 - i * 8);
+      const [x1, y1] = face === 'u' ? P.P(u1, v0 + 0.05, h - 10 - i * 8) : P.P(u0 + 0.05, v1, h - 10 - i * 8);
       line(l, [x0, y0, x1, y1], [0x3ccf63, 0x4fb3ff, 0xffd23f][i % 3], 2.5);
       lights.addChild(l);
     }
@@ -397,8 +398,9 @@ export function buildServerRoom(def: RoomDef, t: number): Container[] {
     items.push(c);
   };
   const H = 52 + t * 6;
-  rack(0.02, 0.12, 0.02, 0.11, H);
-  rack(0.86, 0.96, 0.02, 0.11, H);
+  // первая — в дальнем углу, дверцей к рядам столов; вторая — у правого угла, дверцей тоже в комнату (не к бортику)
+  rack(0.02, 0.12, 0.02, 0.11, H, 'u');
+  rack(0.86, 0.95, 0.02, 0.11, H, 'v');
   // роутер с антеннами на первой стойке
   {
     const { c, g } = item(P.z(0.12, 0.11) + 1);
@@ -411,14 +413,16 @@ export function buildServerRoom(def: RoomDef, t: number): Container[] {
     circle(g, lx, ly, 1.5, { fill: 0x3ccf63, line: 0 });
     items.push(c);
   }
-  // принтер на тумбе в дальнем левом углу
+  // принтер на тумбе в ближнем углу — целиком внутри комнаты, не заходит за бортики
   {
-    const { c, g } = item(P.z(0.14, 0.98));
-    P.shadow(g, 0.03, 0.14, 0.86, 0.98);
-    P.box(g, 0.03, 0.14, 0.86, 0.98, 0, 20, 0xc3c6d4, 0x9aa0b4, 0x7d8398);
-    P.box(g, 0.04, 0.13, 0.87, 0.97, 20, 32, 0xf4f4f8, 0xd9dbe6, 0xc3c6d4);
-    P.flat(g, 0.06, 0.11, 0.89, 0.95, { fill: 0xffffff, line: 1.5 }, 32.5);
-    const [x, y] = P.P(0.13, 0.9, 28);
+    const u0 = 0.82;
+    const v0 = 0.82;
+    const { c, g } = item(P.z(u0 + 0.1, v0 + 0.1));
+    P.shadow(g, u0, u0 + 0.1, v0, v0 + 0.1);
+    P.box(g, u0, u0 + 0.1, v0, v0 + 0.1, 0, 20, 0xc3c6d4, 0x9aa0b4, 0x7d8398);
+    P.box(g, u0 + 0.01, u0 + 0.09, v0 + 0.01, v0 + 0.09, 20, 32, 0xf4f4f8, 0xd9dbe6, 0xc3c6d4);
+    P.flat(g, u0 + 0.025, u0 + 0.075, v0 + 0.025, v0 + 0.075, { fill: 0xffffff, line: 1.5 }, 32.5);
+    const [x, y] = P.P(u0 + 0.09, v0 + 0.03, 28);
     circle(g, x, y, 1.6, { fill: 0xe8173a, line: 0 });
     items.push(c);
   }

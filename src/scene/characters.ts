@@ -534,6 +534,7 @@ export class Character {
   }
 
   private mugC: Container | null = null;
+  private armIdx = -1;
   private padG: Graphics | null = null;
 
   /** Что в руках: кружка (пьёт кофе), геймпад (играет) или ничего. */
@@ -560,6 +561,12 @@ export class Character {
     }
     if (this.mugC) this.mugC.visible = prop === 'mug';
     if (this.padG) this.padG.visible = prop === 'pad';
+    // рука с кружкой — поверх туловища (обычно руки за ним), иначе кружку не видно
+    const bob = this.front.bob;
+    const arm = this.front.armR;
+    if (this.armIdx < 0) this.armIdx = bob.getChildIndex(arm);
+    bob.removeChild(arm);
+    bob.addChildAt(arm, prop === 'mug' ? bob.getChildIndex(this.front.head) : Math.min(this.armIdx, bob.children.length));
   }
 
   /** Спрятать свои руки (за столом их рисует рабочее место — руки на клавиатуре). */

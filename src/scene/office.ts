@@ -360,6 +360,8 @@ export class OfficeView {
   /** Замки закрытых комнат: ключ — `d<номер отдела>` или id комнаты (director, rest, toilet). */
   private locks = new Map<string, LockView>();
   private hireMarks = new Container();
+  /** Названия комнат, нарисованные на полу. */
+  private readonly floorText = new Container();
   private popups: Popup[] = [];
   private snow: Graphics[] = [];
   private hallDecor = new Container();
@@ -376,6 +378,8 @@ export class OfficeView {
     this.container.addChild(this.bg, this.world, this.labels, this.top);
     this.hireMarks.zIndex = -1e6;
     this.world.addChild(this.hireMarks);
+    this.floorText.zIndex = -8.5e5;
+    this.world.addChild(this.floorText);
     this.buildStatic();
     this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng, (kind) => this.slotOpen(kind));
     this.walkers.onToilet = (stall, busy) => this.setStall(stall, busy);
@@ -444,6 +448,7 @@ export class OfficeView {
   private buildStatic(): void {
     for (const c of this.bg.removeChildren()) c.destroy({ children: true });
     for (const c of this.labels.removeChildren()) c.destroy({ children: true });
+    for (const c of this.floorText.removeChildren()) c.destroy({ children: true });
     for (const w of this.wallSegs) w.destroy();
     this.wallSegs = [];
     const th = this.theme;
@@ -665,9 +670,10 @@ export class OfficeView {
     // ось текста — вдоль ряда (вверх-вправо по экрану), «вниз» текста — к камере: буквы лежат в плоскости пола
     label.setFromMatrix(new Matrix(0.894, -0.447, 0.894, 0.447, 0, 0));
     const lp = roomPoint(0.9, 0.5);
-    label.position.set(lp.x, lp.y);
+    label.position.set(ctr.x + lp.x, ctr.y + lp.y);
     label.alpha = 0.92;
-    c.addChild(label);
+    // слой надписей на полу: выше ковров и проводов, ниже мебели и людей
+    this.floorText.addChild(label);
 
     const lockKey = def.kind === 'dept' ? `d${def.dept}` : def.kind === 'director' || def.kind === 'rest' || def.kind === 'toilet' ? def.kind : null;
     if (lockKey) {
