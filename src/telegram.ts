@@ -51,7 +51,9 @@ export function onTelegramLayout(cb: () => void): void {
 export function initTelegram(): TelegramInfo {
   const tg = window.Telegram?.WebApp;
   // Вне Telegram SDK тоже загружается, но initData пустой.
-  if (!tg || !tg.initData) {
+  // На некоторых платформах (Telegram Desktop) initData может быть пустым,
+  // но initDataUnsafe содержит user — соберём initData из него.
+  if (!tg || (!tg.initData && !tg.initDataUnsafe?.user)) {
     return { insideTelegram: false, initData: '', platform: 'browser' };
   }
 
@@ -76,10 +78,20 @@ export function initTelegram(): TelegramInfo {
     // старый клиент
   }
 
+  // Если initData пустой — соберём его из initDataUnsafe
+  let initData = tg.initData;
+  if (!initData && tg.initDataUnsafe?.user) {
+    const u = tg.initDataUnsafe.user;
+    initData = `id=${u.id}&first_name=${encodeURIComponent(u.first_name || '')}` +
+      (u.last_name ? `&last_name=${encodeURIComponent(u.last_name)}` : '') +
+      (u.username ? `&username=${encodeURIComponent(u.username)}` : '') +
+      `&language_code=${encodeURIComponent(u.language_code || 'en')}`;
+  }
+
   return {
     insideTelegram: true,
     user: tg.initDataUnsafe.user,
-    initData: tg.initData,
+    initData,
     platform: tg.platform,
   };
 }
