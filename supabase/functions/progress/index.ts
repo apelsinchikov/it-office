@@ -1,82 +1,56 @@
-import { serve } from 'https://deno.land/x/supabase_mod@latest/mod.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js'
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
+function key(kind: 'secret' | 'publishable'): string {
+  const dict = Deno.env.get(kind === 'secret' ? 'SUPABASE_SECRET_KEYS' : 'SUPABASE_PUBLISHABLE_KEYS')
+  if (dict) {
+    try {
+      const value = JSON.parse(dict).default
+      if (value) return value
+    } catch {
+      // legacy
+    }
+  }
+  return Deno.env.get(kind === 'secret' ? 'SUPABASE_SERVICE_ROLE_KEY' : 'SUPABASE_ANON_KEY') ?? ''
+}
 
 Deno.serve(async (req) => {
-  const { action, telegram_id, state, company_no, lifetime, score, save_created_at, force, p_limit } = await req.json()
+  const url = Deno.env.get('SUPABASE_URL')
+  if (!url) return new Response(JSON.stringify({ error: 'not_configured' }), { status: 500 })
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
+  try {
+    const { action, telegram_id, state, company_no, lifetime, score, save_created_at, force, p_limit } = await req.json()
 
-  if (action === 'load') {
-    const { data, error } = await supabase
-      .from('players')
-      .select('state, save_created_at')
-      .eq('telegram_id', telegram_id)
-      .single()
+    const supabase = createClient(url, key('secret'), { auth: { persistSession: false, autoRefreshToken: false } })
 
-    if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
-    if (!data) return new Response(JSON.stringify({ state: null, save_created_at: 0 }))
-
-    return new Response(JSON.stringify({ state: data.state, save_created_at: data.save_created_at }))
-  }
-
-  if (action === 'save') {
-    // Проверяем текущий score на сервере
-    const { data: existing, error: loadError } = await supabase
-      .from('players')
-      .select('score, save_created_at')
-      .eq('telegram_id', telegram_id)
-      .single()
-
-    if (loadError) return new Response(JSON.stringify({ error: loadError.message }), { status: 500 })
-
-    // Если сохранение старее — не принимаем (если не force)
-    if (existing && !force && save_created_at && existing.save_created_at >= save_created_at) {
-      return new Response(JSON.stringify({ success: false, reason: 'stale' }))
+    if (action === 'load') {
+      const { data, error } = await supabase.rpc('ef_load_progress', { p_telegram_id: telegram_id })
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+      if (!data) return new Response(JSON.stringify({ state: null, save_created_at: 0 }))
+      return new Response(JSON.stringify({ state: data.state, save_created_at: data.save_created_at }))
     }
 
-    // Обновляем state и метаданные
-    const { error: saveError } = await supabase
-      .from('players')
-      .update({
-        state,
-        company_no,
-        lifetime,
-        score,
-        save_created_at: save_created_at || Date.now(),
-        updated_at: new Date().toISOString()
+    if (action === 'save') {
+      const success = await supabase.rpc('ef_save_progress', {
+        p_telegram_id: telegram_id,
+        p_state: state,
+        p_company_no: company_no,
+        p_lifetime: lifetime,
+        p_score: score,
+        p_save_created_at: save_created_at || Date.now(),
+        p_force: force || false,
       })
-      .eq('telegram_id', telegram_id)
+      if (success === false) return new Response(JSON.stringify({ success: false, reason: 'stale' }))
+      return new Response(JSON.stringify({ success: !!success }))
+    }
 
-    if (saveError) return new Response(JSON.stringify({ error: saveError.message }), { status: 500 })
+    if (action === 'leaderboard') {
+      const { data, error } = await supabase.rpc('ef_leaderboard', { p_limit: p_limit || 100, p_telegram_id: telegram_id })
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+      return new Response(JSON.stringify(data))
+    }
 
-    return new Response(JSON.stringify({ success: true }))
+    return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400 })
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 })
   }
-
-  if (action === 'leaderboard') {
-    const limit = p_limit || 100
-    const { data, error } = await supabase
-      .from('players')
-      .select('telegram_id, first_name, last_name, username, company_no, lifetime, score')
-      .order('score', { ascending: false })
-      .limit(limit)
-
-    if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
-
-    const top = (data || []).map((p, i) => ({
-      place: i + 1,
-      name: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-      company: p.company_no,
-      lifetime: p.lifetime,
-      me: p.telegram_id === telegram_id
-    }))
-
-    const me = top.find(r => r.me) || null
-
-    return new Response(JSON.stringify({ top, me }))
-  }
-
-  return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400 })
 })
