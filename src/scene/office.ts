@@ -148,6 +148,8 @@ class DeskView {
     this.char.root.scale.set(0.7);
     this.char.turnFace(5); // смотрит вниз-вправо, на клавиатуру
     this.scene.addChild(this.char.root);
+    // ящик сисадмина стоит под столом — рисуем до столешницы
+    if (post) this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     this.scene.addChild(deskSlab(deskT));
     this.scene.addChild(monitor(monT));
     this.scene.addChild(keyboard(keyT));
@@ -170,7 +172,6 @@ class DeskView {
       l.scale.set(ls);
       l.position.set(at[0] - 24 * ls, at[1] - 54 * ls);
       this.scene.addChild(l);
-      this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     }
     if (this.single('flower')) this.scene.addChild(flower());
     if (this.single('mug')) {

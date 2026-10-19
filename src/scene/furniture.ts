@@ -25,14 +25,14 @@ export const SPOT = {
   /** Сотрудник (точка на полу под ним). */
   seat: [-46, 0] as const,
   keyboard: [-15, 0] as const,
-  monitor: [-24, -26] as const,
-  lamp: [-24, -54] as const,
+  monitor: [-24, -20] as const,
+  lamp: [-22, -55] as const,
   mouse: [-15, 30] as const,
   phone: [6, 44] as const,
   mug: [12, 16] as const,
   flower: [14, -46] as const,
-  /** Ящик с инструментами сисадмина — на полу перед столом справа. */
-  toolbox: [48, -36] as const,
+  /** Ящик с инструментами сисадмина — на полу под столом, слева. */
+  toolbox: [4, 40] as const,
 };
 
 interface Slab {
