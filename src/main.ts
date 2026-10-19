@@ -11,7 +11,7 @@ import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
 import { loadRemote, saveRemote, setRemoteAuth } from './game/remote';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
-import { newState, progressScore, type GameState } from './game/state';
+import { newState, type GameState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import * as charactersM from './scene/characters';
@@ -32,7 +32,7 @@ const OFFLINE_MIN_SEC = 60;
 
 async function start(): Promise<void> {
   const tg = initTelegram();
-  setRemoteAuth(tg.initData);
+  setRemoteAuth({ init_data: tg.initData, telegram_id: tg.user?.id || 0 });
   let state = loadLocal();
   // сброс конкретного игрока по списку public/resets.json (один раз: новое сохранение моложе отметки)
   const resetAt = await fetchResetBefore(tg.user, `${import.meta.env.BASE_URL}resets.json`);
@@ -76,7 +76,7 @@ async function start(): Promise<void> {
   const saveAll = (): void => {
     save();
     void saveCloud(game.state);
-    void saveRemote(game.state, false, true);
+    void saveRemote(game.state, false);
   };
 
   // eslint-disable-next-line prefer-const
@@ -266,36 +266,20 @@ async function start(): Promise<void> {
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
 
   // при входе сверяем три копии: на устройстве, в Telegram CloudStorage и в Supabase — берём самую продвинутую
-  // Debug overlay: показывает что происходит с синхронизацией
-  const debugEl = document.createElement('div');
-  debugEl.style.cssText = 'position:fixed;top:60px;left:4px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font:10px monospace;padding:6px 8px;border-radius:6px;max-width:280px;overflow:hidden;pointer-events:none;line-height:1.4;';
-  document.body.appendChild(debugEl);
-  let debugLines: string[] = [];
-  const debugLog = (msg: string) => {
-    const t = new Date().toLocaleTimeString();
-    debugLines.push(`[${t}] ${msg}`);
-    if (debugLines.length > 12) debugLines.shift();
-    debugEl.textContent = debugLines.join('\n');
-  };
-
   void Promise.all([loadCloud(), loadRemote()]).then(async ([cloud, remote]) => {
-    debugLog(`cloud=${cloud ? 'ok' : 'null'} remote=${remote.state ? 'ok' : 'null'} fail=${remote.failed}`);
     // копии старше отметки сброса устарели и не возвращаются
     const fresh = (c: GameState | null): GameState | null => (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
     const cloudOk = fresh(cloud);
     const remoteOk = fresh(remote.state);
     const remoteStale = !!remote.state && !remoteOk;
     const best = better(better(game.state, cloudOk), remoteOk);
-    debugLog(`localScore=${progressScore(game.state).toFixed(1)} cloudScore=${cloudOk ? progressScore(cloudOk).toFixed(1) : '—'} remoteScore=${remoteOk ? progressScore(remoteOk).toFixed(1) : '—'}`);
     if (best !== game.state) {
-      debugLog(`BEST DIFFERENT — reloading`);
       // прогресс дальше в другой копии: записываем его везде и перезапускаемся с ним
       saveLocal(best);
       await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
       location.reload();
       return;
     }
-    debugLog(`best == local — no reload`);
     if (wasReset || (cloud && !cloudOk)) void saveCloud(game.state);
     // первый вход после появления Supabase: текущий прогресс уходит на сервер
     if (!remote.failed) void saveRemote(game.state, wasReset || remoteStale);
