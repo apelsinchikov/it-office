@@ -27,7 +27,6 @@ import {
   sink,
   sofa,
   steam,
-  sysadminPost,
   toiletCabin,
   toolbox,
   tvStand,
@@ -35,6 +34,7 @@ import {
   waterCooler,
 } from './furniture';
 import {
+  AISLE_U,
   DESK_SLOTS,
   GAP,
   LEDGE_H,
@@ -127,12 +127,13 @@ class DeskView {
     this.code = [];
     this.steamG = null;
     this.lights = null;
-    if (isPost(this.d)) this.buildPost(rng);
-    else this.buildDesk(rng);
+    this.buildDesk(rng);
   }
 
   private buildDesk(rng: () => number): void {
-    const deskT = Math.max(0, this.tier('desk'));
+    const post = isPost(this.d);
+    // у сисадминов «пост»: тот же стол с компьютером, его уровень — уровень поста; плюс лампа и ящик с инструментами
+    const deskT = Math.max(0, this.tier(post ? 'post' : 'desk'));
     const chairT = Math.max(0, this.tier('chair'));
     const monT = this.tier('monitor') >= 0 ? this.tier('monitor') : deskT;
     const keyT = this.tier('keyboard') >= 0 ? this.tier('keyboard') : deskT;
@@ -151,46 +152,24 @@ class DeskView {
     this.scene.addChild(...this.code);
     if (this.tier('phone') >= 0) this.scene.addChild(phone(this.tier('phone')));
     if (this.tier('mouse') >= 0) this.scene.addChild(mouse(this.tier('mouse')));
+    if (post) {
+      // лампа справа на столе (нарисована в координатах поста 120×110, ×1,9)
+      const l = lamp(Math.max(0, this.tier('lamp')));
+      l.scale.set(1.9);
+      l.position.set(154, -2);
+      this.scene.addChild(l);
+      this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
+    }
     if (this.single('flower')) this.scene.addChild(flower());
     if (this.single('mug')) {
-      this.scene.addChild(mug(166, 104));
-      this.steamG = steam(172, 100);
-      this.scene.addChild(this.steamG);
-    }
-  }
-
-  private buildPost(rng: () => number): void {
-    const postT = Math.max(0, this.tier('post'));
-    const post = sysadminPost(postT);
-    post.scale.set(1.9);
-    post.position.set(16, -10.2);
-    post.addChild(lamp(Math.max(0, this.tier('lamp'))));
-    this.lights = (post.children.find((c) => c.label === 'lights') as Container | undefined) ?? null;
-    this.scene.addChild(post);
-    const chairT = Math.max(0, this.tier('chair'));
-    const stool = new Graphics();
-    const stoolC = [0x9aa0b4, 0xc98545, 0x5a6078, 0xe8173a][chairT];
-    ellipse(stool, 92, 186, 16, 6, { fill: OUT, alpha: 0.12, line: 0 });
-    rect(stool, 89, 168, 6, 16, 0, OUT);
-    ellipse(stool, 92, 166, 14, 6, stoolC);
-    this.scene.addChild(stool);
-    this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
-    this.char = new Character(this.look, rng);
-    this.char.root.position.set(186, 192);
-    this.char.root.scale.set(0.7);
-    this.char.setDir(3);
-    this.char.mode = 'repair';
-    this.scene.addChild(this.char.root);
-    if (this.single('mug')) {
-      this.scene.addChild(mug(150, 74));
-      this.steamG = steam(156, 70);
+      this.scene.addChild(mug(post ? 104 : 166, post ? 108 : 104));
+      this.steamG = steam(post ? 110 : 172, post ? 104 : 100);
       this.scene.addChild(this.steamG);
     }
   }
 
   /** Точка над головой (для пузыря), в мире. */
   anchor(): Pt {
-    if (isPost(this.d)) return { x: this.root.x + (186 - 130) * DESK_SCALE, y: this.root.y + (72 - 160) * DESK_SCALE };
     return { x: this.root.x + (150 - 130) * DESK_SCALE, y: this.root.y + (4 - 160) * DESK_SCALE };
   }
 
@@ -200,7 +179,7 @@ class DeskView {
   }
 
   setTalking(on: boolean): void {
-    if (isPost(this.d)) this.char.mode = on ? 'talk' : 'repair';
+    void on; // сидящие говорят без смены позы
   }
 
   update(dt: number, speed: number): void {
@@ -702,7 +681,7 @@ export class OfficeView {
       if (has && !this.managers[d]) {
         const def = deptRoom(d);
         // ходит по проходу между рядами столов
-        const pts = [0.27, 0.4, 0.53, 0.66, 0.79].map((u) => roomWorld(def, u, 1.06 - u));
+        const pts = [0.12, 0.3, 0.5, 0.7, 0.88].map((v) => roomWorld(def, AISLE_U, v));
         const look = randomLook(seeded(this.game.state.company * 1009 + d * 31 + 500), 'manager');
         const m = new RoomWalker(look, pts, this.rng, 2, 5, true);
         this.world.addChild(m.char.root);
