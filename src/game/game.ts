@@ -1,14 +1,15 @@
 // Ядро игры: выплаты, покупки, активная игра, офлайн, реорганизация, смена компании.
 // Чистый TypeScript без графики — тот же код гоняет симуляция игроков (sim/).
 
-import { DEPTS, DEPT_COUNT, DESKS, SHOP, companyDef, shopItem, type CompanyDef } from './config';
+import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, SEQUENCE, SHOP, companyDef, shopItem, stepIndex, type CompanyDef, type RoomId, type Step } from './config';
+import { perkPower, tickPerks } from './director';
 import {
   AVRAL_COOLDOWN,
   AVRAL_MULT,
   AVRAL_SEC,
   FURN_SINGLE_BONUS,
-  GRANTS_DIV,
   GRANTS_MIN,
+  TOILET_BONUS,
   HIRE_GATES,
   MANAGER_BONUS,
   MANAGER_NEEDS_DESK,
@@ -25,8 +26,13 @@ import {
   furnSingleCost,
   furnTierBonusTotal,
   furnTierCost,
+  grantsDivBase,
   grantsFor,
-  levelCost,
+  grantsPow,
+  hireCost as hireBase,
+  roomUnlockCost,
+  scaleOld,
+  TUNING,
   managerCost,
   maxAffordable,
   payoutIncome,
@@ -63,6 +69,7 @@ export type GameEvent =
   | { type: 'levels'; dept: number; desk: number; n: number }
   | { type: 'hire'; dept: number; desk: number }
   | { type: 'unlock'; dept: number }
+  | { type: 'room'; id: RoomId }
   | { type: 'manager'; dept: number }
   | { type: 'furn'; dept: number; desk: number }
   | { type: 'rest'; kind: RestKind }
@@ -141,6 +148,25 @@ export class Game {
     return this.run.depts[d];
   }
 
+  roomOpen(id: RoomId): boolean {
+    return this.run.rooms[id];
+  }
+
+  stepOpen(st: Step): boolean {
+    return st.kind === 'dept' ? this.run.depts[st.d] : this.run.rooms[st.id];
+  }
+
+  /** Предыдущая по порядку открытия комната уже открыта. */
+  private prevOpen(st: Step): boolean {
+    const i = stepIndex(st);
+    return i <= 0 || this.stepOpen(SEQUENCE[i - 1]);
+  }
+
+  /** Что открывать следующим (для подсказок). */
+  nextStep(): Step | undefined {
+    return SEQUENCE.find((st) => !this.stepOpen(st));
+  }
+
   hiredCount(d: number): number {
     return this.run.levels[d].filter((l) => l > 0).length;
   }
@@ -154,15 +180,17 @@ export class Game {
     return this.company().costMult * (1 - 0.02 * this.shopLevel('furnDiscount'));
   }
 
+  /** Прибавка ко всему офису от зоны отдыха и туалета. */
   restBonus(): number {
     const r = this.run.rest;
     let b = 0;
-    for (const kind of REST_KINDS) for (let i = 0; i < r[kind]; i++) b += REST[kind].bonus[i];
+    if (this.run.rooms.rest) for (const kind of REST_KINDS) for (let i = 0; i < r[kind]; i++) b += REST[kind].bonus[i];
+    if (this.run.rooms.toilet) b += TOILET_BONUS;
     return b;
   }
 
   payoutTime(d: number): number {
-    return PAYOUT_SEC * (1 - 0.02 * this.shopLevel(`speed${d}`)) * this.company().payoutMult;
+    return PAYOUT_SEC * (1 - 0.02 * this.shopLevel(`speed${d}`)) * this.company().payoutMult * (1 - perkPower(this, 'speed'));
   }
 
   furnBonus(d: number, k: number): number {
@@ -186,6 +214,7 @@ export class Game {
     let m = this.cultureMult() * (1 + 0.05 * this.shopLevel(`income${d}`)) * (1 + this.restBonus());
     if (this.run.managers[d]) m *= 1 + MANAGER_BONUS;
     m *= this.company().incomeMult * this.event.incomeMult * (this.event.deptMult[d] ?? 1);
+    m *= perkPower(this, 'income') || 1;
     if (withAvral && this.isAvral()) m *= AVRAL_MULT;
     return m;
   }
@@ -207,10 +236,10 @@ export class Game {
     return sum;
   }
 
-  deptIncomePerSec(d: number): number {
+  deptIncomePerSec(d: number, withAvral = true): number {
     let sum = 0;
     const t = this.payoutTime(d);
-    for (let k = 0; k < DESKS; k++) sum += this.payoutOf(d, k) / t;
+    for (let k = 0; k < DESKS; k++) sum += this.payoutOf(d, k, withAvral) / t;
     return sum;
   }
 
@@ -236,7 +265,7 @@ export class Game {
 
   private ticketDelay(): number {
     const base = TICKET_EVERY_MIN + this.rng() * (TICKET_EVERY_MAX - TICKET_EVERY_MIN);
-    return base / Math.max(0.1, this.event.ticketFreqMult);
+    return base / Math.max(0.1, this.event.ticketFreqMult * (perkPower(this, 'tickets') || 1));
   }
 
   /**
@@ -244,6 +273,7 @@ export class Game {
    * только тогда появляются тикеты.
    */
   tick(dt: number, active = true): void {
+    if (active) tickPerks(this, dt);
     // «Аврал»: таймеры
     if (this.avralLeft > 0) {
       this.avralLeft -= dt;
@@ -321,7 +351,7 @@ export class Game {
   }
 
   canAvral(): boolean {
-    return this.avralLeft <= 0 && this.avralCooldown <= 0;
+    return this.run.rooms.director && this.avralLeft <= 0 && this.avralCooldown <= 0;
   }
 
   startAvral(): boolean {
@@ -388,8 +418,10 @@ export class Game {
     return -1;
   }
 
+  /** Найм: формула или минута-другая дохода отдела — что больше. */
   hireCost(d: number, k: number): number {
-    return levelCost(d, k, 0) * this.levelCostMult();
+    const floor = this.deptIncomePerSec(d, false) * (TUNING.hireFloorSec[k] ?? 0);
+    return Math.max(hireBase(d, k) * this.levelCostMult(), floor);
   }
 
   hire(d: number, k: number): boolean {
@@ -403,7 +435,7 @@ export class Game {
   }
 
   unlockAvailable(d: number): boolean {
-    return d > 0 && !this.run.depts[d] && this.run.depts[d - 1];
+    return d > 0 && !this.run.depts[d] && this.prevOpen({ kind: 'dept', d });
   }
 
   unlockCost(d: number): number {
@@ -417,6 +449,22 @@ export class Game {
     this.run.levels[d][0] = 1;
     this.timers[d][0] = 0;
     this.emit({ type: 'unlock', dept: d });
+    return true;
+  }
+
+  roomUnlockAvailable(id: RoomId): boolean {
+    return !this.run.rooms[id] && this.prevOpen({ kind: 'room', id });
+  }
+
+  roomCost(id: RoomId): number {
+    return roomUnlockCost(id) * this.levelCostMult();
+  }
+
+  unlockRoom(id: RoomId): boolean {
+    if (!this.roomUnlockAvailable(id)) return false;
+    if (!this.pay(this.roomCost(id))) return false;
+    this.run.rooms[id] = true;
+    this.emit({ type: 'room', id });
     return true;
   }
 
@@ -478,7 +526,7 @@ export class Game {
   }
 
   buyRest(kind: RestKind): boolean {
-    if (this.run.rest[kind] >= this.restMax(kind)) return false;
+    if (!this.run.rooms.rest || this.run.rest[kind] >= this.restMax(kind)) return false;
     if (!this.pay(this.restCost(kind))) return false;
     this.run.rest[kind]++;
     this.state.stats.restBought++;
@@ -489,7 +537,7 @@ export class Game {
   // ---------- Гранты и реорганизация ----------
 
   grantsDiv(): number {
-    return GRANTS_DIV * this.company().costMult;
+    return grantsDivBase() * this.company().costMult;
   }
 
   pendingGrants(): number {
@@ -508,12 +556,12 @@ export class Game {
   /** Сколько нужно заработать за забег, чтобы получить g Грантов. */
   earnedForGrants(g: number): number {
     const lobby = 1 + 0.05 * this.shopLevel('lobby');
-    return this.grantsDiv() * (g / (2 * lobby)) ** (1 / 0.4);
+    return this.grantsDiv() * (g / (TUNING.grantsK * lobby)) ** (1 / grantsPow());
   }
 
   startCapital(): number {
     const l = this.shopLevel('startCapital');
-    return l > 0 ? 200 * 4 ** l * this.company().costMult : 0;
+    return l > 0 ? scaleOld(200 * 4 ** l) * this.company().costMult : 0;
   }
 
   private resetRun(): void {
@@ -583,6 +631,7 @@ export class Game {
         if (r.singles[d][k].some((x) => !x)) return false;
       }
     }
+    if (!ROOM_IDS.every((id) => r.rooms[id])) return false;
     return REST_KINDS.every((kind) => r.rest[kind] >= this.restMax(kind));
   }
 
@@ -605,6 +654,10 @@ export class Game {
     for (const kind of REST_KINDS) {
       total += this.restMax(kind);
       have += r.rest[kind];
+    }
+    for (const id of ROOM_IDS) {
+      total++;
+      if (r.rooms[id]) have++;
     }
     return have / total;
   }

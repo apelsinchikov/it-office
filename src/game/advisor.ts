@@ -1,7 +1,7 @@
 // Список покупок с окупаемостью: для подсветки «выгодно» в интерфейсе и для симуляции игроков.
 
-import { DEPTS, DEPT_COUNT, DESKS } from './config';
-import { FURN_SINGLE_BONUS, FURN_TIER_BONUS, MANAGER_BONUS, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from './economy';
+import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, type RoomId } from './config';
+import { AVRAL_COOLDOWN, AVRAL_MULT, AVRAL_SEC, FURN_SINGLE_BONUS, FURN_TIER_BONUS, MANAGER_BONUS, REST, REST_KINDS, TOILET_BONUS, nextMilestone, payoutIncome, type RestKind } from './economy';
 import type { Game } from './game';
 
 export type Purchase =
@@ -11,7 +11,8 @@ export type Purchase =
   | { kind: 'manager'; d: number; cost: number; gain: number }
   | { kind: 'furn'; d: number; k: number; i: number; cost: number; gain: number }
   | { kind: 'single'; d: number; k: number; j: number; cost: number; gain: number }
-  | { kind: 'rest'; rest: RestKind; cost: number; gain: number };
+  | { kind: 'rest'; rest: RestKind; cost: number; gain: number }
+  | { kind: 'room'; id: RoomId; cost: number; gain: number };
 
 /**
  * Все доступные сейчас покупки (по деньгам — любые) с приростом дохода в секунду.
@@ -62,9 +63,15 @@ export function purchases(g: Game, maxChunk = 25): Purchase[] {
     }
   }
   const total = g.incomePerSec(true);
+  // кабинет директора даёт «Аврал», отдых — свои покупки, туалет — +3%
+  for (const id of ROOM_IDS) {
+    if (!g.roomUnlockAvailable(id)) continue;
+    const share = id === 'director' ? ((AVRAL_MULT - 1) * AVRAL_SEC) / (AVRAL_SEC + AVRAL_COOLDOWN) : id === 'rest' ? REST.coffee.bonus[0] : TOILET_BONUS;
+    out.push({ kind: 'room', id, cost: g.roomCost(id), gain: (total * share) / (1 + g.restBonus()) });
+  }
   for (const kind of REST_KINDS) {
     const lvl = run.rest[kind];
-    if (lvl < REST[kind].cost.length) {
+    if (run.rooms.rest && lvl < REST[kind].cost.length) {
       out.push({ kind: 'rest', rest: kind, cost: g.restCost(kind), gain: (total * REST[kind].bonus[lvl]) / (1 + g.restBonus()) });
     }
   }
@@ -105,5 +112,7 @@ export function apply(g: Game, p: Purchase): boolean {
       return g.buySingle(p.d, p.k, p.j);
     case 'rest':
       return g.buyRest(p.rest);
+    case 'room':
+      return g.unlockRoom(p.id);
   }
 }

@@ -459,5 +459,6 @@ export function phraseById(id: string): Phrase | undefined {
 export const TOTAL_PHRASES = PHRASE_GROUPS.reduce((s, g) => s + PHRASES[g].length, 0);
 
 /** Группа реплик руководителя отдела. */
-export const LEAD_GROUP: PhraseGroup[] = ['supportLead', 'devLead', 'qaLead', 'analystsLead', 'sysadminsLead'];
-export const DEPT_GROUP: PhraseGroup[] = ['support', 'dev', 'qa', 'analysts', 'sysadmins'];
+// по номерам отделов (порядок открытия: сисадмины, поддержка, аналитики, разработка, тестирование)
+export const LEAD_GROUP: PhraseGroup[] = ['sysadminsLead', 'supportLead', 'analystsLead', 'devLead', 'qaLead'];
+export const DEPT_GROUP: PhraseGroup[] = ['sysadmins', 'support', 'analysts', 'dev', 'qa'];

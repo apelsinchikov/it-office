@@ -1,18 +1,14 @@
 // Сцена офиса: комнаты, рабочие места, руководители, директор, зона отдыха, туалет, прохожие.
 
 import { Container, Graphics, Text } from 'pixi.js';
-import { DEPTS, DEPT_COUNT, DESKS, companyDef } from '../game/config';
+import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, companyDef } from '../game/config';
 import { formatNumber } from '../game/format';
 import type { Game, GameEvent } from '../game/game';
 import { DEPT_GROUP, LEAD_GROUP, type PhraseGroup } from '../game/phrases';
 import { t, type Key } from '../i18n';
-import { Character, DIRECTOR_LOOK, dirFrom, randomLook, type Look, type Outfit } from './characters';
-import { OUT, circle, line, rect, shade } from './draw';
+import { Character, DIRECTOR_LOOK, randomLook, type Look, type Outfit } from './characters';
+import { OUT, circle, ellipse, line, poly, rect, shade } from './draw';
 import {
-  DESK_TOP_BACK,
-  DESK_TOP_FRONT,
-  POST_BACK,
-  WORKER_Y,
   chairBack,
   codeLines,
   coffeeMachine,
@@ -31,7 +27,6 @@ import {
   sink,
   sofa,
   steam,
-  stool,
   sysadminPost,
   toiletCabin,
   toolbox,
@@ -41,10 +36,12 @@ import {
 } from './furniture';
 import {
   DESK_SLOTS,
+  GAP,
+  LEDGE_H,
   OUTER_WALL_H,
   P,
   ROOMS,
-  ROOM_D,
+  ROOM_H,
   ROOM_W,
   WALL_H,
   deptRoom,
@@ -52,7 +49,6 @@ import {
   isInsideRoom,
   roomById,
   roomCenter,
-  roomRect,
   roomWorld,
   touchesOuter,
   worldToIso,
@@ -62,7 +58,13 @@ import {
 import { THEMES, type Theme } from './theme';
 import { CHAR_SCALE, WalkerWorld } from './walkers';
 
-const OUTFIT_OF: Outfit[] = ['support', 'dev', 'qa', 'analyst', 'sysadmin'];
+export const DESK_SCALE = 0.45;
+const OUTFIT_BY_ID: Record<string, Outfit> = { sysadmins: 'sysadmin', support: 'support', analysts: 'analyst', dev: 'dev', qa: 'qa' };
+const outfitOf = (d: number): Outfit => OUTFIT_BY_ID[DEPTS[d].id] ?? 'dev';
+/** У сисадминов вместо стола — пост с сервером, сотрудник стоит. */
+const isPost = (d: number): boolean => DEPTS[d].id === 'sysadmins';
+/** Поле вокруг офиса (трава, деревья, дорожки), в пикселях мира. */
+const YARD = 520;
 
 export interface Speaker {
   id: string;
@@ -79,9 +81,10 @@ function sleeveOf(look: Look): number {
   return look.color;
 }
 
-/** Рабочее место: стол + сидящий за ним сотрудник лицом к камере (у сисадминов — верстак и стоящий спиной сотрудник). */
+/** Рабочее место: стол + сидящий сотрудник (у сисадминов — пост и стоящий сотрудник). */
 class DeskView {
   readonly root = new Container();
+  private readonly scene = new Container();
   private char!: Character;
   private hands: Container[] = [];
   private code: Container[] = [];
@@ -97,11 +100,14 @@ class DeskView {
     rng: () => number,
   ) {
     // внешность постоянная: одна и та же для этого места в этой компании
-    this.look = randomLook(seeded(game.state.company * 1009 + d * 31 + k * 7 + 1), OUTFIT_OF[d]);
+    this.look = randomLook(seeded(game.state.company * 1009 + d * 31 + k * 7 + 1), outfitOf(d));
     const slot = DESK_SLOTS[k];
     const w = roomWorld(deptRoom(d), slot.u, slot.v);
     this.root.position.set(w.x, w.y);
     this.root.zIndex = w.y;
+    this.scene.scale.set(DESK_SCALE);
+    this.scene.pivot.set(130, 160);
+    this.root.addChild(this.scene);
     this.build(rng);
   }
 
@@ -116,12 +122,12 @@ class DeskView {
   }
 
   build(rng: () => number = Math.random): void {
-    for (const c of this.root.removeChildren()) c.destroy({ children: true });
+    for (const c of this.scene.removeChildren()) c.destroy({ children: true });
     this.hands = [];
     this.code = [];
     this.steamG = null;
     this.lights = null;
-    if (this.d === 4) this.buildPost(rng);
+    if (isPost(this.d)) this.buildPost(rng);
     else this.buildDesk(rng);
   }
 
@@ -130,65 +136,71 @@ class DeskView {
     const chairT = Math.max(0, this.tier('chair'));
     const monT = this.tier('monitor') >= 0 ? this.tier('monitor') : deskT;
     const keyT = this.tier('keyboard') >= 0 ? this.tier('keyboard') : deskT;
-    this.root.addChild(chairBack(chairT));
+    this.scene.addChild(chairBack(chairT));
     this.char = new Character(this.look, rng, true);
-    this.char.root.position.set(0, WORKER_Y);
-    this.char.root.scale.set(CHAR_SCALE);
-    this.root.addChild(this.char.root);
-    this.root.addChild(deskSlab(deskT));
-    const mon = monitor(monT);
-    this.root.addChild(mon.g);
-    this.code = codeLines(monT, mon.screen);
-    this.root.addChild(...this.code);
-    this.root.addChild(keyboard(keyT));
+    this.char.root.position.set(150, 124.6);
+    this.char.root.scale.set(0.7);
+    this.scene.addChild(this.char.root);
+    this.scene.addChild(deskSlab(deskT));
+    this.scene.addChild(keyboard(keyT));
     const sleeve = sleeveOf(this.look);
     this.hands = [typingHand('L', sleeve, this.look.skin), typingHand('R', sleeve, this.look.skin)];
-    this.root.addChild(...this.hands);
-    if (this.tier('phone') >= 0) this.root.addChild(phone(this.tier('phone')));
-    if (this.tier('mouse') >= 0) this.root.addChild(mouse(this.tier('mouse')));
-    if (this.single('flower')) this.root.addChild(flower());
+    this.scene.addChild(...this.hands);
+    this.scene.addChild(monitor(monT));
+    this.code = codeLines(monT);
+    this.scene.addChild(...this.code);
+    if (this.tier('phone') >= 0) this.scene.addChild(phone(this.tier('phone')));
+    if (this.tier('mouse') >= 0) this.scene.addChild(mouse(this.tier('mouse')));
+    if (this.single('flower')) this.scene.addChild(flower());
     if (this.single('mug')) {
-      this.root.addChild(mug(-46, DESK_TOP_FRONT - 16));
-      this.steamG = steam(-41, DESK_TOP_FRONT - 18);
-      this.root.addChild(this.steamG);
+      this.scene.addChild(mug(166, 104));
+      this.steamG = steam(172, 100);
+      this.scene.addChild(this.steamG);
     }
   }
 
   private buildPost(rng: () => number): void {
     const postT = Math.max(0, this.tier('post'));
     const post = sysadminPost(postT);
+    post.scale.set(1.9);
+    post.position.set(16, -10.2);
     post.addChild(lamp(Math.max(0, this.tier('lamp'))));
     this.lights = (post.children.find((c) => c.label === 'lights') as Container | undefined) ?? null;
-    this.root.addChild(post);
-    if (this.single('mug')) {
-      this.root.addChild(mug(-8, POST_BACK - 56));
-      this.steamG = steam(-3, POST_BACK - 58);
-      this.root.addChild(this.steamG);
-    }
-    this.root.addChild(stool(Math.max(0, this.tier('chair'))));
-    this.root.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
+    this.scene.addChild(post);
+    const chairT = Math.max(0, this.tier('chair'));
+    const stool = new Graphics();
+    const stoolC = [0x9aa0b4, 0xc98545, 0x5a6078, 0xe8173a][chairT];
+    ellipse(stool, 92, 186, 16, 6, { fill: OUT, alpha: 0.12, line: 0 });
+    rect(stool, 89, 168, 6, 16, 0, OUT);
+    ellipse(stool, 92, 166, 14, 6, stoolC);
+    this.scene.addChild(stool);
+    this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     this.char = new Character(this.look, rng);
-    this.char.root.position.set(0, -4);
-    this.char.root.scale.set(CHAR_SCALE);
-    this.char.setDir(2);
+    this.char.root.position.set(186, 192);
+    this.char.root.scale.set(0.7);
+    this.char.setDir(3);
     this.char.mode = 'repair';
-    this.root.addChild(this.char.root);
+    this.scene.addChild(this.char.root);
+    if (this.single('mug')) {
+      this.scene.addChild(mug(150, 74));
+      this.steamG = steam(156, 70);
+      this.scene.addChild(this.steamG);
+    }
   }
 
   /** Точка над головой (для пузыря), в мире. */
   anchor(): Pt {
-    if (this.d === 4) return { x: this.root.x, y: this.root.y - 64 };
-    return { x: this.root.x, y: this.root.y + WORKER_Y - 60 };
+    if (isPost(this.d)) return { x: this.root.x + (186 - 130) * DESK_SCALE, y: this.root.y + (72 - 160) * DESK_SCALE };
+    return { x: this.root.x + (150 - 130) * DESK_SCALE, y: this.root.y + (4 - 160) * DESK_SCALE };
   }
 
   /** Точка для тикета. */
   ticketAnchor(): Pt {
-    return { x: this.root.x - 26, y: this.root.y + DESK_TOP_BACK - 44 };
+    return { x: this.root.x - 18, y: this.root.y - 92 };
   }
 
   setTalking(on: boolean): void {
-    if (this.d === 4) this.char.mode = on ? 'talk' : 'repair';
-    else this.char.mode = on ? 'talk' : 'sit';
+    if (isPost(this.d)) this.char.mode = on ? 'talk' : 'repair';
   }
 
   update(dt: number, speed: number): void {
@@ -196,12 +208,12 @@ class DeskView {
     this.char.speed = speed;
     this.char.update(dt);
     if (this.hands.length) {
-      this.hands[0].y = -2.5 * Math.max(0, Math.sin(this.t * 19));
-      this.hands[1].y = -2.5 * Math.max(0, Math.sin(this.t * 19 + Math.PI));
+      this.hands[0].y = -3 * Math.max(0, Math.sin(this.t * 19));
+      this.hands[1].y = -3 * Math.max(0, Math.sin(this.t * 19 + Math.PI));
     }
     this.code.forEach((c, i) => {
       const ph = (this.t * 0.62 + i * 0.33) % 1;
-      c.scale.x = Math.min(1, ph / 0.6);
+      c.scale.set(Math.min(1, ph / 0.6));
     });
     if (this.steamG) {
       const ph = (this.t * 0.4) % 1;
@@ -282,11 +294,11 @@ class RoomWalker {
       const d = Math.hypot(dx, dy);
       const step = 30 * dt;
       this.char.mode = 'walk';
-      this.char.setDir(dirFrom(dx, dy));
+      this.char.setDir(dx >= 0 ? (dy >= 0 ? 0 : 2) : dy >= 0 ? 1 : 3);
       if (d <= step) {
         r.position.set(t.x, t.y);
         this.wait = this.pauseMin + this.rng() * (this.pauseMax - this.pauseMin);
-        this.char.setDir(this.rng() < 0.7 ? 0 : this.rng() < 0.5 ? 1 : 3);
+        this.char.setDir(this.rng() < 0.5 ? 0 : 1);
       } else {
         r.x += (dx / d) * step;
         r.y += (dy / d) * step;
@@ -325,14 +337,12 @@ export class OfficeView {
   private toilet!: ReturnType<typeof toiletCabin>;
   private toiletBusy = false;
   readonly walkers: WalkerWorld;
-  private locks: (LockView | null)[] = DEPTS.map(() => null);
+  /** Замки закрытых комнат: ключ — `d<номер отдела>` или id комнаты (director, rest, toilet). */
+  private locks = new Map<string, LockView>();
   private hireMarks = new Container();
   private popups: Popup[] = [];
   private snow: Graphics[] = [];
   private hallDecor = new Container();
-  /** Стены кабинетов и мебель общих зон в сортируемом слое — пересоздаются вместе со статикой. */
-  private wallGs: Graphics[] = [];
-  private staticItems: Container[] = [];
   /** Прохожий дошёл до стены этажа: id говорящего для пузыря. */
   onWalkerEdge: (speakerId: string) => void = () => {};
   private time = 0;
@@ -347,7 +357,7 @@ export class OfficeView {
     this.hireMarks.zIndex = -1e6;
     this.world.addChild(this.hireMarks);
     this.buildStatic();
-    this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng);
+    this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng, (kind) => this.slotOpen(kind));
     this.walkers.onToilet = (busy) => this.setToilet(busy);
     this.walkers.onEdge = (w) => this.onWalkerEdge(`walker${this.walkers.walkers.indexOf(w)}`);
     this.syncAll();
@@ -360,36 +370,30 @@ export class OfficeView {
 
   // ---------- статика: пол, стены, комнаты, мебель общих зон ----------
 
-  /** Нельзя ходить: кабинеты, директор, мебель и боковые стены отдыха и туалета. a, b — координаты плана. */
   private blocked(a: number, b: number): boolean {
     for (const r of ROOMS) {
-      const u = a - (r.col * P - 0.5);
-      const v = b - (r.row * P - 0.5);
-      const inside = u >= -0.02 && u <= 1.02 && v >= -0.02 && v <= 1.02;
-      if (!inside) continue;
-      if (r.kind === 'dept' || r.kind === 'director') return true;
-      if (r.kind === 'rest' || r.kind === 'toilet') {
-        // заходят только спереди: стены слева и справа
-        if (u < 0.05 || u > 0.95) return true;
+      const closed = (r.kind === 'rest' || r.kind === 'toilet') && !this.game.roomOpen(r.kind);
+      if (r.kind === 'dept' || r.kind === 'director' || closed) {
+        if (Math.abs(a - r.col * P) <= 0.52 && Math.abs(b - r.row * P) <= 0.52) return true;
       }
     }
-    // мебель общих зон: прямоугольники в координатах комнаты (u, v, полуширина, полуглубина)
-    const items: [RoomDef['id'], number, number, number, number][] = [
-      ['rest', 0.22, 0.13, 0.16, 0.13],
-      ['rest', 0.88, 0.14, 0.07, 0.14],
-      ['rest', 0.55, 0.1, 0.13, 0.11],
-      ['rest', 0.55, 0.6, 0.18, 0.04],
-      ['toilet', 0.34, 0.18, 0.14, 0.19],
-      ['toilet', 0.8, 0.12, 0.07, 0.13],
-      ['hall', 0.08, 0.14, 0.05, 0.05],
-      ['hall', 0.08, 0.92, 0.05, 0.05],
-      ['hall', 0.92, 0.14, 0.05, 0.06],
+    // мебель общих зон: квадраты в координатах комнаты (u, v, полуразмер)
+    const items: [RoomDef['id'], number, number, number][] = [
+      ['rest', 0.2, 0.14, 0.12],
+      ['rest', 0.82, 0.16, 0.1],
+      ['rest', 0.36, 0.72, 0.1],
+      ['rest', 0.76, 0.78, 0.1],
+      ['toilet', 0.44, 0.22, 0.16],
+      ['toilet', 0.82, 0.5, 0.08],
+      ['hall', 0.12, 0.12, 0.06],
+      ['hall', 0.88, 0.12, 0.06],
+      ['hall', 0.12, 0.88, 0.06],
     ];
-    for (const [id, cu, cv, hu, hv] of items) {
+    for (const [id, u, v, h] of items) {
       const r = roomById(id);
-      const u = a - (r.col * P - 0.5);
-      const v = b - (r.row * P - 0.5);
-      if (Math.abs(u - cu) <= hu && Math.abs(v - cv) <= hv) return true;
+      const ca = r.col * P - 0.5 + u;
+      const cb = r.row * P - 0.5 + v;
+      if (Math.abs(a - ca) <= h && Math.abs(b - cb) <= h) return true;
     }
     return false;
   }
@@ -397,39 +401,56 @@ export class OfficeView {
   private buildStatic(): void {
     for (const c of this.bg.removeChildren()) c.destroy({ children: true });
     for (const c of this.labels.removeChildren()) c.destroy({ children: true });
-    for (const w of this.wallGs) w.destroy();
-    this.wallGs = [];
     const th = this.theme;
     const f = floorBounds();
-    const fw = f.x1 - f.x0;
-    const fh = f.y1 - f.y0;
+    this.bg.addChild(this.drawYard());
     const g = new Graphics();
-    // пол этажа: доски (стартап) или плитка
-    rect(g, f.x0, f.y0, fw, fh, 0, { fill: th.floor, line: 4 });
-    for (let i = 1; i < 18; i++) line(g, [f.x0, f.y0 + (fh * i) / 18, f.x1, f.y0 + (fh * i) / 18], th.floorLine, 1.5);
-    if (this.game.company().style !== 'startup') for (let i = 1; i < 18; i++) line(g, [f.x0 + (fw * i) / 18, f.y0, f.x0 + (fw * i) / 18, f.y1], th.floorLine, 1.5);
+    // пол этажа
+    poly(g, [f.cx, f.cy - f.hh, f.cx + f.hw, f.cy, f.cx, f.cy + f.hh, f.cx - f.hw, f.cy], { fill: th.floor, line: 4 });
+    // доски / плитка
+    for (let i = 1; i < 14; i++) {
+      const s = f.min + ((f.max - f.min) * i) / 14;
+      const a0 = isoW(s, f.min);
+      const a1 = isoW(s, f.max);
+      line(g, [a0.x, a0.y, a1.x, a1.y], th.floorLine, 1.5);
+      if (this.game.company().style !== 'startup') {
+        const b0 = isoW(f.min, s);
+        const b1 = isoW(f.max, s);
+        line(g, [b0.x, b0.y, b1.x, b1.y], th.floorLine, 1.5);
+      }
+    }
+    // торцы пола у ближних краёв: этаж стоит на «плите»
+    const slab = 14;
+    poly(g, [f.cx - f.hw, f.cy, f.cx, f.cy + f.hh, f.cx, f.cy + f.hh + slab, f.cx - f.hw, f.cy + slab], shade(th.floor, -0.3));
+    poly(g, [f.cx, f.cy + f.hh, f.cx + f.hw, f.cy, f.cx + f.hw, f.cy + slab, f.cx, f.cy + f.hh + slab], shade(th.floor, -0.4));
     this.bg.addChild(g);
 
-    // стены этажа: дальняя с окнами, боковые видны сверху узкой полосой
+    // внешние стены с окнами по двум дальним краям этажа
     const walls = new Graphics();
     const H = OUTER_WALL_H;
-    rect(walls, f.x0, f.y0 - H, fw, H, 0, { fill: th.wall, line: 4 });
-    const nWin = 9;
-    for (let i = 0; i < nWin; i++) {
-      const x0 = f.x0 + (fw * (i + 0.2)) / nWin;
-      const x1 = f.x0 + (fw * (i + 0.8)) / nWin;
-      rect(walls, x0, f.y0 - H * 0.82, x1 - x0, H * 0.58, 3, { fill: th.window, line: 3 });
-      if (this.game.company().style === 'space') {
-        circle(walls, (x0 + x1) / 2 - 6, f.y0 - H * 0.66, 1.6, { fill: 0xffffff, line: 0 });
-        circle(walls, (x0 + x1) / 2 + 8, f.y0 - H * 0.46, 1.2, { fill: 0xffffff, line: 0 });
-      } else line(walls, [x0 + 5, f.y0 - H * 0.74, x0 + 16, f.y0 - H * 0.78], 0xffffff, 2);
+    const left = { x: f.cx - f.hw, y: f.cy };
+    const topP = { x: f.cx, y: f.cy - f.hh };
+    const right = { x: f.cx + f.hw, y: f.cy };
+    poly(walls, [left.x, left.y, topP.x, topP.y, topP.x, topP.y - H, left.x, left.y - H], { fill: th.wall, line: 4 });
+    poly(walls, [topP.x, topP.y, right.x, right.y, right.x, right.y - H, topP.x, topP.y - H], { fill: shade(th.wall, -0.08), line: 4 });
+    for (let i = 0; i < 6; i++) {
+      for (const side of [0, 1]) {
+        const a = side === 0 ? left : topP;
+        const b = side === 0 ? topP : right;
+        const t0 = (i + 0.2) / 6;
+        const t1 = (i + 0.8) / 6;
+        const x0 = a.x + (b.x - a.x) * t0;
+        const y0 = a.y + (b.y - a.y) * t0;
+        const x1 = a.x + (b.x - a.x) * t1;
+        const y1 = a.y + (b.y - a.y) * t1;
+        poly(walls, [x0, y0 - 16, x1, y1 - 16, x1, y1 - 56, x0, y0 - 56], { fill: th.window, line: 3 });
+        if (this.game.company().style === 'space') {
+          circle(walls, (x0 + x1) / 2, (y0 + y1) / 2 - 40, 1.6, { fill: 0xffffff, line: 0 });
+          circle(walls, (x0 + x1) / 2 + 8, (y0 + y1) / 2 - 28, 1.2, { fill: 0xffffff, line: 0 });
+        } else line(walls, [x0 + 4, y0 - 50, x0 + 14, y0 - 54], 0xffffff, 2);
+      }
     }
-    if (th.neon) line(walls, [f.x0, f.y0 - H + 5, f.x1, f.y0 - H + 5], th.neon, 3);
-    const TW = 14;
-    for (const x of [f.x0 - TW, f.x1]) {
-      rect(walls, x, f.y0 - H, TW, fh, 0, { fill: th.wallTop, line: 3 });
-      rect(walls, x, f.y1 - H, TW, H, 0, { fill: shade(th.wall, -0.15), line: 3 });
-    }
+    if (th.neon) line(walls, [left.x, left.y - H + 6, topP.x, topP.y - H + 6, right.x, right.y - H + 6], th.neon, 3);
     this.bg.addChild(walls);
 
     // комнаты
@@ -439,61 +460,61 @@ export class OfficeView {
     for (const c of [this.directorDeskG, this.rest.coffee, this.rest.fridge, this.rest.tv, this.hallDecor]) {
       if (c.parent) c.parent.removeChild(c);
     }
-    for (const c of this.staticItems) c.destroy({ children: true });
-    this.staticItems = [];
-    const place = (c: Container, def: RoomDef, u: number, v: number, own = true): void => {
+    const restDef = roomById('rest');
+    const place = (c: Container, def: RoomDef, u: number, v: number, sx = 1, ox = 0, oy = 0): void => {
       const w = roomWorld(def, u, v);
       c.position.set(w.x, w.y);
       c.zIndex = w.y;
+      c.scale.set(sx);
+      c.pivot.set(ox, oy);
       this.world.addChild(c);
-      if (own) this.staticItems.push(c);
     };
-    const restDef = roomById('rest');
-    place(this.rest.coffee, restDef, 0.22, 0.26, false);
-    place(this.rest.fridge, restDef, 0.88, 0.28, false);
-    place(this.rest.tv, restDef, 0.55, 0.21, false);
+    place(this.rest.coffee, restDef, 0.2, 0.14, 0.9, 70, 120);
+    place(this.rest.fridge, restDef, 0.82, 0.16, 0.85, 70, 138);
     const sofaC = new Container();
     sofaC.addChild(sofa(th.rest === 0x8ccaca ? 0x2fbfae : shade(th.rest, 0.1)));
-    place(sofaC, restDef, 0.55, 0.63);
+    place(sofaC, restDef, 0.36, 0.72, 0.9, 80, 90);
+    place(this.rest.tv, restDef, 0.78, 0.8, 0.8, 80, 104);
     this.syncRest();
 
     const toiletDef = roomById('toilet');
     this.toilet = toiletCabin();
-    place(this.toilet.root, toiletDef, 0.34, 0.37);
+    place(this.toilet.root, toiletDef, 0.44, 0.22, 0.8, 70, 140);
     const sk = new Container();
     sk.addChild(sink());
-    place(sk, toiletDef, 0.8, 0.25);
+    place(sk, toiletDef, 0.82, 0.5, 0.8, 30, 40);
     this.setToilet(this.toiletBusy);
 
     const dirDef = roomById('director');
-    place(this.directorDeskG, dirDef, 0.5, 0.5, false);
+    place(this.directorDeskG, dirDef, 0.5, 0.42, 0.8, 0, 0);
     this.syncDirectorDesk();
     const pl = new Container();
     pl.addChild(plant(th.plant, true));
-    place(pl, dirDef, 0.88, 0.22);
+    place(pl, dirDef, 0.86, 0.14, 0.8);
     this.director?.char.root.parent?.removeChild(this.director.char.root);
     this.director = new RoomWalker(
       DIRECTOR_LOOK,
-      [roomWorld(dirDef, 0.5, 0.78), roomWorld(dirDef, 0.16, 0.42), roomWorld(dirDef, 0.24, 0.86), roomWorld(dirDef, 0.76, 0.82), roomWorld(dirDef, 0.84, 0.46)],
+      [roomWorld(dirDef, 0.5, 0.66), roomWorld(dirDef, 0.12, 0.32), roomWorld(dirDef, 0.3, 0.75), roomWorld(dirDef, 0.7, 0.7)],
       this.rng,
       4,
       8,
     );
     this.world.addChild(this.director.char.root);
 
-    // холл: растения, кулер, ковёр (на полу), ёлка
+    // холл: растения, кулер, ковёр, ёлка
+    for (const c of this.hallDecor.removeChildren()) c.destroy({ children: true });
     const hall = roomById('hall');
     for (const [u, v] of [
-      [0.08, 0.16],
-      [0.08, 0.94],
+      [0.12, 0.12],
+      [0.12, 0.88],
     ]) {
       const pc = new Container();
       pc.addChild(plant(th.plant, true));
-      place(pc, hall, u, v);
+      place(pc, hall, u, v, 0.9);
     }
     const cooler = new Container();
     cooler.addChild(waterCooler());
-    place(cooler, hall, 0.92, 0.18);
+    place(cooler, hall, 0.88, 0.12, 0.9);
     this.syncEventDecor();
   }
 
@@ -501,66 +522,61 @@ export class OfficeView {
     const c = new Container();
     const th = this.theme;
     const ctr = roomCenter(def.col, def.row);
-    const R = roomRect(def);
+    c.position.set(ctr.x, ctr.y);
+    const hw = ROOM_W / 2;
+    const hh = ROOM_H / 2;
     let floor = th.hall;
     if (def.kind === 'dept') floor = th.carpets[def.dept!];
     else if (def.kind === 'director') floor = th.carpets[5];
     else if (def.kind === 'rest') floor = th.rest;
     else if (def.kind === 'toilet') floor = th.toilet;
     const g = new Graphics();
-    rect(g, R.x0, R.y0, ROOM_W, ROOM_D, 0, { fill: floor, line: 3 });
-    if (def.kind === 'hall') {
-      const mx = ROOM_W * 0.22;
-      const my = ROOM_D * 0.22;
-      rect(g, R.x0 + mx, R.y0 + my, ROOM_W - mx * 2, ROOM_D - my * 2, 10, { fill: shade(floor, -0.12), line: 2 });
+    const wall = def.kind === 'hall' ? 0 : WALL_H;
+    // у края этажа своей стены нет: её роль играет стена этажа
+    const outer = touchesOuter(def);
+    if (wall && !outer.left) poly(g, [-hw, 0, 0, -hh, 0, -hh - wall, -hw, -wall], shade(floor, -0.3));
+    if (wall && !outer.right) poly(g, [0, -hh, hw, 0, hw, -wall, 0, -hh - wall], shade(floor, -0.38));
+    poly(g, [0, -hh, hw, 0, 0, hh, -hw, 0], { fill: floor, line: 3 });
+    if (wall) {
+      // низкие бортики по ближним краям, посередине — проход
+      const ledge = (x0: number, y0: number, x1: number, y1: number, color: number): void => {
+        for (const [t0, t1] of [
+          [0, 0.36],
+          [0.64, 1],
+        ]) {
+          const ax = x0 + (x1 - x0) * t0;
+          const ay = y0 + (y1 - y0) * t0;
+          const bx = x0 + (x1 - x0) * t1;
+          const by = y0 + (y1 - y0) * t1;
+          poly(g, [ax, ay, bx, by, bx, by - LEDGE_H, ax, ay - LEDGE_H], { fill: color, line: 2 });
+        }
+      };
+      ledge(-hw, 0, 0, hh, shade(floor, -0.18));
+      ledge(0, hh, hw, 0, shade(floor, -0.26));
     }
+    if (def.kind === 'hall') poly(g, [0, -hh * 0.55, hw * 0.55, 0, 0, hh * 0.55, -hw * 0.55, 0], { fill: shade(floor, -0.12), line: 2 });
     if (def.kind === 'toilet') {
-      for (let i = 1; i < 7; i++) {
-        line(g, [R.x0 + (ROOM_W * i) / 7, R.y0, R.x0 + (ROOM_W * i) / 7, R.y1], shade(floor, -0.08), 1.5);
-        line(g, [R.x0, R.y0 + (ROOM_D * i) / 7, R.x1, R.y0 + (ROOM_D * i) / 7], shade(floor, -0.08), 1.5);
+      // плитка: линии вдоль обеих изо-осей
+      for (let i = 1; i < 6; i++) {
+        const k = i / 6;
+        line(g, [-hw + hw * k, -hh * k, hw * k, hh - hh * k], shade(floor, -0.08), 1.5);
+        line(g, [hw - hw * k, -hh * k, -hw * k, hh - hh * k], shade(floor, -0.08), 1.5);
       }
     }
     c.addChild(g);
-
-    // стены кабинета: дальняя (если не упирается в стену этажа) и боковые (кроме тех, что у стены этажа).
-    // Стены — в сортируемом слое, чтобы люди в коридоре за кабинетом уходили за стену.
-    if (def.kind !== 'hall') {
-      const out = touchesOuter(def);
-      if (!out.back) {
-        const bw = new Graphics();
-        rect(bw, R.x0, R.y0 - WALL_H, ROOM_W, WALL_H, 0, { fill: shade(floor, -0.3), line: 3 });
-        bw.zIndex = R.y0 - 0.5;
-        this.world.addChild(bw);
-        this.wallGs.push(bw);
-      }
-      const TW = 9;
-      for (const [x, skip] of [
-        [R.x0, out.left],
-        [R.x1 - TW, out.right],
-      ] as const) {
-        if (skip) continue;
-        const sw = new Graphics();
-        const top = out.back ? R.y0 - OUTER_WALL_H * 0.4 : R.y0 - WALL_H;
-        rect(sw, x, top, TW, R.y1 - WALL_H - top, 0, { fill: shade(floor, -0.15), line: 2.5 });
-        rect(sw, x, R.y1 - WALL_H, TW, WALL_H, 0, { fill: shade(floor, -0.38), line: 2.5 });
-        sw.zIndex = R.y1;
-        this.world.addChild(sw);
-        this.wallGs.push(sw);
-      }
-    }
-
     const label = new Text({
       text: t(`room.${def.id}` as Key),
       style: { fill: '#ffffff', fontSize: 20, fontWeight: '800', fontFamily: 'Nunito, system-ui, sans-serif', stroke: { color: '#262338', width: 4 } },
     });
     label.anchor.set(0.5);
-    label.position.set(ctr.x, R.y1 - 16);
+    label.position.set(ctr.x, ctr.y + hh - 26);
     this.labels.addChild(label);
 
-    if (def.kind === 'dept') {
+    const lockKey = def.kind === 'dept' ? `d${def.dept}` : def.kind === 'director' || def.kind === 'rest' || def.kind === 'toilet' ? def.kind : null;
+    if (lockKey) {
       const lockRoot = new Container();
       const shadeG = new Graphics();
-      rect(shadeG, R.x0, R.y0, ROOM_W, ROOM_D, 0, { fill: 0x262338, alpha: 0.5, line: 0 });
+      poly(shadeG, [0, -hh, hw, 0, 0, hh, -hw, 0], { fill: 0x262338, alpha: 0.5, line: 0 });
       const lockG = new Graphics();
       rect(lockG, -16, -24, 32, 26, 6, 0xffd23f);
       lockG.moveTo(-9, -24).lineTo(-9, -34).arc(0, -34, 9, Math.PI, 0).lineTo(9, -24).stroke({ color: OUT, width: 5, cap: 'round' });
@@ -577,7 +593,7 @@ export class OfficeView {
       badge.position.set(ctr.x, ctr.y);
       badge.addChild(lockG, price);
       this.labels.addChild(badge);
-      this.locks[def.dept!] = { root: lockRoot, badge, price };
+      this.locks.set(lockKey, { root: lockRoot, badge, price });
     }
     return c;
   }
@@ -586,6 +602,76 @@ export class OfficeView {
     this.theme = THEMES[this.game.company().style];
     this.buildStatic();
     this.syncAll();
+  }
+
+  /** Поле вокруг офиса: трава, дорожки, деревья, кусты. Узор постоянный (seeded). */
+  private drawYard(): Container {
+    const c = new Container();
+    const b = this.bounds();
+    const f = floorBounds();
+    const space = this.game.company().style === 'space';
+    const grass = space ? 0x2b2950 : 0x8fd16a;
+    const grass2 = space ? 0x33315c : 0x84c75f;
+    const g = new Graphics();
+    rect(g, b.x, b.y, b.width, b.height, 0, { fill: grass, line: 0 });
+    const rnd = seeded(77);
+    // пятна травы потемнее
+    for (let i = 0; i < 90; i++) {
+      ellipse(g, b.x + rnd() * b.width, b.y + rnd() * b.height, 30 + rnd() * 60, 12 + rnd() * 24, { fill: grass2, line: 0 });
+    }
+    // дорожка вокруг этажа и дорожка от входа (ближний угол) к краю поля
+    const path = space ? 0x4a4775 : 0xe9d9b0;
+    const ring = GAP * 0.55;
+    const k = ring / Math.max(1, f.hw);
+    poly(g, [f.cx, f.cy - f.hh * (1 + k) - ring * 0.2, f.cx + f.hw * (1 + k), f.cy, f.cx, f.cy + f.hh * (1 + k) + ring * 0.2, f.cx - f.hw * (1 + k), f.cy], { fill: path, line: 3 });
+    // дорожка от входа (ближний угол этажа) вдоль изо-оси к краю поля
+    const ux = 2 / Math.sqrt(5);
+    const uy = 1 / Math.sqrt(5);
+    const pw = 46;
+    const ex = f.cx;
+    const ey = f.cy + f.hh;
+    const L = YARD * 2.4;
+    poly(g, [ex - ux * pw, ey + uy * pw - 20, ex + ux * pw, ey - uy * pw - 20, ex + ux * pw + ux * L, ey - uy * pw + uy * L, ex - ux * pw + ux * L, ey + uy * pw + uy * L], { fill: path, line: 3 });
+    const onPath = (x: number, y: number): boolean => {
+      const rx = x - ex;
+      const ry = y - ey;
+      const along = rx * ux + ry * uy;
+      const across = Math.abs(-rx * uy + ry * ux);
+      return along > -40 && across < pw + 50;
+    };
+    c.addChild(g);
+    // деревья и кусты — вне этажа и дорожки, с отступом
+    const outside = (x: number, y: number, pad: number): boolean => {
+      const dx = Math.abs(x - f.cx) / (f.hw * (1 + k) + pad);
+      const dy = Math.abs(y - f.cy) / (f.hh * (1 + k) + pad * 0.5);
+      return dx + dy > 1;
+    };
+    const trees: { x: number; y: number; r: number; bush: boolean }[] = [];
+    for (let i = 0; i < 400 && trees.length < 70; i++) {
+      const x = b.x + rnd() * b.width;
+      const y = b.y + rnd() * b.height;
+      if (!outside(x, y, 60)) continue;
+      if (onPath(x, y)) continue; // не на дорожке
+      if (trees.some((t) => Math.hypot(t.x - x, (t.y - y) * 2) < 90)) continue;
+      trees.push({ x, y, r: 26 + rnd() * 18, bush: rnd() < 0.35 });
+    }
+    trees.sort((p, q) => p.y - q.y);
+    const tg = new Graphics();
+    for (const t of trees) {
+      const leaf = space ? 0x6b5bd6 : t.bush ? 0x4fb34a : 0x3f9f45;
+      ellipse(tg, t.x, t.y, t.r * 0.9, t.r * 0.35, { fill: OUT, alpha: 0.16, line: 0 });
+      if (t.bush) {
+        circle(tg, t.x - t.r * 0.35, t.y - t.r * 0.3, t.r * 0.45, leaf);
+        circle(tg, t.x + t.r * 0.35, t.y - t.r * 0.3, t.r * 0.45, leaf);
+        circle(tg, t.x, t.y - t.r * 0.55, t.r * 0.5, shade(leaf, 0.08));
+      } else {
+        rect(tg, t.x - 5, t.y - t.r * 1.1, 10, t.r * 1.1, 3, space ? 0x3b3566 : 0x9a6a3e);
+        circle(tg, t.x, t.y - t.r * 1.5, t.r, leaf);
+        circle(tg, t.x - t.r * 0.3, t.y - t.r * 1.75, t.r * 0.45, { fill: shade(leaf, 0.18), line: 0 });
+      }
+    }
+    c.addChild(tg);
+    return c;
   }
 
   // ---------- синхронизация с состоянием игры ----------
@@ -616,7 +702,7 @@ export class OfficeView {
       if (has && !this.managers[d]) {
         const def = deptRoom(d);
         // ходит по проходу между рядами столов
-        const pts = [0.12, 0.3, 0.5, 0.7, 0.88].map((u) => roomWorld(def, u, 0.57));
+        const pts = [0.27, 0.4, 0.53, 0.66, 0.79].map((u) => roomWorld(def, u, 1.06 - u));
         const look = randomLook(seeded(this.game.state.company * 1009 + d * 31 + 500), 'manager');
         const m = new RoomWalker(look, pts, this.rng, 2, 5, true);
         this.world.addChild(m.char.root);
@@ -625,9 +711,15 @@ export class OfficeView {
         this.managers[d]!.char.root.destroy({ children: true });
         this.managers[d] = null;
       }
-      const lock = this.locks[d];
+      const lock = this.locks.get(`d${d}`);
       if (lock) lock.root.visible = lock.badge.visible = !this.game.isUnlocked(d);
     }
+    for (const id of ROOM_IDS) {
+      const lock = this.locks.get(id);
+      if (lock) lock.root.visible = lock.badge.visible = !this.game.roomOpen(id);
+    }
+    const dirOpen = this.game.roomOpen('director');
+    this.director.char.root.visible = dirOpen;
     this.syncRest();
     this.syncDirectorDesk();
     this.syncHireMarks();
@@ -659,30 +751,40 @@ export class OfficeView {
       const w = roomWorld(deptRoom(d), slot.u, slot.v);
       const g = new Graphics();
       const ready = this.game.hireAvailable(d, k);
-      rect(g, w.x - 52, w.y - 44, 104, 44, 8, {
+      poly(g, [w.x, w.y - 22, w.x + 40, w.y, w.x, w.y + 22, w.x - 40, w.y], {
         fill: 0xffffff,
         alpha: ready ? 0.35 : 0.12,
         line: 2,
         lineColor: ready ? 0x3ccf63 : 0xffffff,
       });
       if (ready) {
-        line(g, [w.x - 8, w.y - 22, w.x + 8, w.y - 22], 0x3ccf63, 4);
-        line(g, [w.x, w.y - 30, w.x, w.y - 14], 0x3ccf63, 4);
+        line(g, [w.x - 8, w.y, w.x + 8, w.y], 0x3ccf63, 4);
+        line(g, [w.x, w.y - 8, w.x, w.y + 8], 0x3ccf63, 4);
       }
       this.hireMarks.addChild(g);
     }
   }
 
   private updateLockPrices(): void {
-    for (let d = 0; d < DEPT_COUNT; d++) {
-      const lock = this.locks[d];
-      if (!lock || !lock.root.visible) continue;
-      if (this.game.unlockAvailable(d)) {
-        const cost = this.game.unlockCost(d);
+    const show = (lock: LockView | undefined, available: boolean, cost: number): void => {
+      if (!lock || !lock.root.visible) return;
+      if (available) {
         lock.price.text = formatNumber(cost);
         lock.price.style.fill = this.game.canAfford(cost) ? '#7dff9a' : '#ffffff';
       } else lock.price.text = t('locked');
-    }
+    };
+    for (let d = 0; d < DEPT_COUNT; d++) show(this.locks.get(`d${d}`), this.game.unlockAvailable(d), this.game.unlockCost(d));
+    for (const id of ROOM_IDS) show(this.locks.get(id), this.game.roomUnlockAvailable(id), this.game.roomCost(id));
+  }
+
+  /** Комнаты открылись или закрылись (реорганизация): прохожие заново узнают, где можно ходить. */
+  private syncRooms(): void {
+    this.walkers.rebuild((a, b) => this.blocked(a, b), (kind) => this.slotOpen(kind));
+    this.syncAll();
+  }
+
+  private slotOpen(kind: string): boolean {
+    return kind === 'toilet' ? this.game.roomOpen('toilet') : this.game.roomOpen('rest');
   }
 
   private setToilet(busy: boolean): void {
@@ -691,9 +793,8 @@ export class OfficeView {
     this.toilet.doorClosed.visible = busy;
     this.toilet.doorOpen.visible = !busy;
     this.toilet.lamp.clear();
-    const L = this.toilet.lampAt;
-    circle(this.toilet.lamp, L.x, L.y, 9, { fill: busy ? 0xff2d3a : 0x3ccf63, alpha: 0.25, line: 0 });
-    circle(this.toilet.lamp, L.x, L.y, 5, busy ? 0xff2d3a : 0x3ccf63);
+    circle(this.toilet.lamp, 53, 50, 9, { fill: busy ? 0xff2d3a : 0x3ccf63, alpha: 0.25, line: 0 });
+    circle(this.toilet.lamp, 53, 50, 5, busy ? 0xff2d3a : 0x3ccf63);
   }
 
   setEvent(id: string | null): void {
@@ -719,7 +820,7 @@ export class OfficeView {
       for (let i = 0; i < 70; i++) {
         const s = new Graphics();
         circle(s, 0, 0, 2 + Math.random() * 2, { fill: 0xffffff, alpha: 0.9, line: 0 });
-        s.position.set(f.x0 + Math.random() * (f.x1 - f.x0), f.y0 - 80 + Math.random() * (f.y1 - f.y0 + 80));
+        s.position.set(f.cx - f.hw + Math.random() * f.hw * 2, f.cy - f.hh - 80 + Math.random() * (f.hh * 2 + 80));
         this.top.addChild(s);
         this.snow.push(s);
       }
@@ -734,8 +835,11 @@ export class OfficeView {
       case 'hire':
       case 'unlock':
       case 'manager':
-      case 'reorg':
         this.syncAll();
+        break;
+      case 'room':
+      case 'reorg':
+        this.syncRooms();
         break;
       case 'levels':
         this.syncHireMarks();
@@ -763,13 +867,19 @@ export class OfficeView {
   }
 
   roomFocus(def: RoomDef): Pt {
-    const c = roomCenter(def.col, def.row);
-    return { x: c.x, y: c.y - WALL_H / 2 };
+    return roomCenter(def.col, def.row);
   }
 
+  /** Весь нарисованный мир: этаж и поле вокруг. Камера не показывает ничего за его краями. */
   bounds(): { x: number; y: number; width: number; height: number } {
     const f = floorBounds();
-    return { x: f.x0 - 20, y: f.y0 - OUTER_WALL_H - 20, width: f.x1 - f.x0 + 40, height: f.y1 - f.y0 + OUTER_WALL_H + 40 };
+    return { x: f.cx - f.hw - YARD, y: f.cy - f.hh - YARD, width: (f.hw + YARD) * 2, height: (f.hh + YARD) * 2 };
+  }
+
+  /** Только этаж (для «показать весь офис»). */
+  floorRect(): { x: number; y: number; width: number; height: number } {
+    const f = floorBounds();
+    return { x: f.cx - f.hw, y: f.cy - f.hh - OUTER_WALL_H, width: f.hw * 2, height: f.hh * 2 + OUTER_WALL_H + 20 };
   }
 
   ticketAnchor(d: number, k: number): Pt | null {
@@ -814,7 +924,7 @@ export class OfficeView {
       room: 'director',
       anchor: () => dir.anchor(),
       groups: () => ['director', ...extra()],
-      canSpeak: () => dir.isResting(),
+      canSpeak: () => dir.isResting() && this.game.roomOpen('director'),
       talk: (on) => dir.setTalking(on),
     });
     this.walkers.walkers.forEach((w, i) => {
@@ -835,8 +945,26 @@ export class OfficeView {
   }
 
   private toiletAnchor(): Pt {
-    const w = roomWorld(roomById('toilet'), 0.34, 0.37);
-    return { x: w.x, y: w.y - 124 };
+    const w = roomWorld(roomById('toilet'), 0.44, 0.22);
+    return { x: w.x, y: w.y - 110 };
+  }
+
+  /** Значки над комнатами: в зоне отдыха можно что-то улучшить; у директора новое задание. */
+  roomBadges(): { pos: Pt; text: string; kind: 'up' | 'task' }[] {
+    const g = this.game;
+    const out: { pos: Pt; text: string; kind: 'up' | 'task' }[] = [];
+    if (g.roomOpen('rest')) {
+      const ready = (['coffee', 'fridge', 'games'] as const).some((k) => g.run.rest[k] < g.restMax(k) && g.canAfford(g.restCost(k)));
+      if (ready) {
+        const w = roomWorld(roomById('rest'), 0.5, 0.5);
+        out.push({ pos: { x: w.x, y: w.y - 120 }, text: `▲ ${t('rest.badge')}`, kind: 'up' });
+      }
+    }
+    if (g.roomOpen('director')) {
+      const task = g.state.director.task;
+      if (task && task.endsAt === 0) out.push({ pos: { x: this.director.char.root.x, y: this.director.char.root.y - 72 }, text: '!', kind: 'task' });
+    }
+    return out;
   }
 
   /** Отметки «?» / «!» над прохожими у края. */
@@ -893,7 +1021,7 @@ export class OfficeView {
       for (const s of this.snow) {
         s.y += dt * 26;
         s.x += Math.sin(this.time + s.y * 0.02) * dt * 8;
-        if (s.y > f.y1) s.y = f.y0 - 80;
+        if (s.y > f.cy + f.hh) s.y = f.cy - f.hh - 80;
       }
     }
     if (Math.floor(this.time * 2) !== Math.floor((this.time - dt) * 2)) this.updateLockPrices();
@@ -918,6 +1046,10 @@ function seeded(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function isoW(a: number, b: number): Pt {
+  return { x: ((a - b) * ROOM_W) / 2, y: ((a + b) * ROOM_H) / 2 };
 }
 
 export { worldToIso };

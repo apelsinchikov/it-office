@@ -1,6 +1,6 @@
 // Сезонные события (роадмап 1.4): даты по Москве.
 
-import { DEPTS } from './config';
+import { DEPTS, deptIndex } from './config';
 import { NO_EVENT, type EventMod } from './game';
 
 export type EventId = 'newyear' | 'sysadminDay' | 'hackathon';
@@ -41,10 +41,10 @@ export function eventMod(id: EventId | null): EventMod {
     case 'newyear':
       return { id, incomeMult: 1.1, deptMult: dept, ticketFreqMult: 1 };
     case 'sysadminDay':
-      dept[4] = 2;
+      dept[deptIndex('sysadmins')] = 2;
       return { id, incomeMult: 1, deptMult: dept, ticketFreqMult: 1 };
     case 'hackathon':
-      dept[1] = 1.5;
+      dept[deptIndex('dev')] = 1.5;
       return { id, incomeMult: 1, deptMult: dept, ticketFreqMult: 2 };
     default:
       return NO_EVENT;

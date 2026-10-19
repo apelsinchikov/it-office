@@ -2,13 +2,14 @@
 
 import type { Purchase } from '../game/advisor';
 import { ACHIEVEMENTS } from '../game/achievements';
-import { COMPANY_STYLES, DEPTS, DESKS, SHOP, companyDef } from '../game/config';
+import { COMPANY_STYLES, DEPTS, DESKS, SEQUENCE, SHOP, companyDef, stepIndex, type RoomId, type Step } from '../game/config';
+import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
 import { FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
 import { formatNumber } from '../game/format';
 import type { Game } from '../game/game';
 import { PHRASES, PHRASE_GROUPS, TOTAL_PHRASES, phraseId, type PhraseGroup } from '../game/phrases';
 import { CHAIN, DAILY, LONG, chainCurrent, chainReward, claimChain, claimDaily, claimLong, dailyProgress, dailyReward, longReady } from '../game/quests';
-import { NAMES, getLang, t, tr, type Key } from '../i18n';
+import { NAMES, duration, getLang, t, tr, type Key } from '../i18n';
 import type { RoomDef } from '../scene/layout';
 import { ICONS, h } from './dom';
 
@@ -101,6 +102,44 @@ function modes(ctx: Ctx): HTMLElement {
   return wrap;
 }
 
+/** Подсказка, что значит значок «Быстрее окупится». */
+function bestHint(): HTMLElement {
+  return h('p', { class: 'note small best-hint' }, h('span', { class: 'b-best inline', text: t('best') }), ` ${t('best.hint')}`);
+}
+
+export function stepName(st: Step): string {
+  return st.kind === 'dept' ? deptName(st.d) : t(`room.${st.id}` as Key);
+}
+
+/** Что нужно открыть перед этим шагом. */
+function prevStepName(st: Step): string {
+  const i = stepIndex(st);
+  return i > 0 ? stepName(SEQUENCE[i - 1]) : '';
+}
+
+/** Закрытая комната (директор, отдых, туалет): описание и кнопка открытия. */
+function roomLockedPanel(ctx: Ctx, id: RoomId): Panel {
+  const g = ctx.game;
+  const txt = h('p', { class: 'note', text: t(`room.lockDesc.${id}` as Key) });
+  const need = h('p', { class: 'note small' });
+  const btn = buyButton(() => g.unlockRoom(id), ctx, false, 'hire');
+  const body = h('div', { class: 'panel-body' }, h('div', { class: 'card col' }, txt, need, btn.el));
+  return {
+    title: t(`room.${id}` as Key),
+    body,
+    refresh() {
+      if (g.roomUnlockAvailable(id)) {
+        need.textContent = '';
+        const cost = g.roomCost(id);
+        btn.set({ label: t('room.unlock'), cost: fmt(cost), enabled: g.canAfford(cost), best: same(ctx.best(), 'room') && (ctx.best() as { id: RoomId }).id === id });
+      } else {
+        need.textContent = t('need.open', { name: prevStepName({ kind: 'room', id }) });
+        btn.set({ label: t('locked'), enabled: false });
+      }
+    },
+  };
+}
+
 export function deptName(d: number): string {
   return t(`room.${DEPTS[d].id}` as Key);
 }
@@ -129,14 +168,14 @@ export function deptPanel(ctx: Ctx, d: number): Panel {
         const cost = g.unlockCost(d);
         btn.set({ label: t('dept.unlock'), cost: fmt(cost), enabled: g.canAfford(cost), best: same(ctx.best(), 'unlock', d) });
       } else {
-        txt.textContent = t('dept.unlockNeed', { name: deptName(d - 1) });
+        txt.textContent = t('need.open', { name: prevStepName({ kind: 'dept', d }) });
         btn.set({ label: t('locked'), enabled: false });
       }
     });
     return { title, body, refresh: () => refreshers.forEach((f) => f()) };
   }
 
-  body.append(modes(ctx));
+  body.append(modes(ctx), bestHint());
   const def = DEPTS[d];
   for (let k = 0; k < DESKS; k++) {
     if (!g.isHired(d, k)) continue;
@@ -244,7 +283,8 @@ export function deptPanel(ctx: Ctx, d: number): Panel {
 
 export function restPanel(ctx: Ctx): Panel {
   const g = ctx.game;
-  const body = h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t('rest.desc') }));
+  if (!g.roomOpen('rest')) return roomLockedPanel(ctx, 'rest');
+  const body = h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t('rest.desc') }), bestHint());
   const refs: (() => void)[] = [];
   for (const kind of REST_KINDS) {
     const info = h('div', { class: 'w-inc' });
@@ -269,19 +309,92 @@ export function restPanel(ctx: Ctx): Panel {
 
 // ---------- директор, холл, туалет ----------
 
+export function perkTitle(kind: PerkKind, tier: Tier): string {
+  const pw = PERKS[kind].power[tier];
+  if (kind === 'speed') return t('perk.speed', { n: Math.round(pw * 100) });
+  if (kind === 'income') return t('perk.income', { n: pw });
+  if (kind === 'tickets') return t('perk.tickets', { n: pw });
+  return t('perk.cash', { time: duration(pw) });
+}
+
+function perkFull(kind: PerkKind, tier: Tier): string {
+  const dur = PERKS[kind].duration[tier];
+  return dur > 0 ? `${perkTitle(kind, tier)} ${t('perk.for', { time: duration(dur) })}` : perkTitle(kind, tier);
+}
+
+export function taskText(kind: string, target: number): string {
+  return t(`task.${kind}` as Key, { n: fmt(target) });
+}
+
 export function directorPanel(ctx: Ctx): Panel {
   const g = ctx.game;
+  if (!g.roomOpen('director')) return roomLockedPanel(ctx, 'director');
   const avral = h('button', { class: 'buy big avral-inline' });
   avral.addEventListener('click', () => ctx.onAvral());
   const desk = buyButton(() => {
     ctx.onDirectorDesk();
     return true;
   }, ctx);
+
+  // задание
+  const tTitle = h('div', { class: 'w-name' });
+  const tInfo = h('div', { class: 'w-inc' });
+  const tBar = h('div', { class: 'bar' }, h('i'));
+  const accept = h('button', { class: 'buy sm', text: t('task.accept') });
+  const decline = h('button', { class: 'mode', text: t('task.decline') });
+  accept.addEventListener('click', () => {
+    if (acceptTask(g, Date.now())) ctx.sfx('click');
+    ctx.rebuild();
+  });
+  decline.addEventListener('click', () => {
+    declineTask(g, Date.now());
+    ctx.sfx('click');
+    ctx.rebuild();
+  });
+  const tBtns = h('div', { class: 'row-btns' }, accept, decline);
+  const taskCard = h('div', { class: 'card col task-card' }, tTitle, tInfo, tBar, tBtns, h('p', { class: 'note small', text: t('task.noPenalty') }));
+
+  // инвентарь
+  const inv = h('div', { class: 'inv' });
+  const active = h('div', { class: 'inv' });
+  let invSig = '';
+  const drawInv = (): void => {
+    const list = inventoryList(g);
+    const sig = list.map((x) => `${x.kind}${x.tier}${x.count}`).join();
+    if (sig === invSig && inv.childElementCount) return;
+    invSig = sig;
+    inv.replaceChildren();
+    if (!list.length) inv.append(h('p', { class: 'note small', text: t('inv.empty') }));
+    for (const it of list) {
+      const use = h('button', { class: 'buy sm', text: t('inv.use') });
+      use.addEventListener('click', () => {
+        if (usePerk(g, it.kind, it.tier)) {
+          ctx.sfx('coin');
+          ctx.toast(t('perk.used'));
+        }
+        ctx.rebuild();
+      });
+      inv.append(
+        h(
+          'div',
+          { class: 'worker' },
+          h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: `${perkFull(it.kind, it.tier)}${it.count > 1 ? ` ×${it.count}` : ''}` }), h('div', { class: 'w-inc', text: tr(TIER_NAMES[it.tier]) })),
+          use,
+        ),
+      );
+    }
+  };
+
   const body = h(
     'div',
     { class: 'panel-body' },
     h('p', { class: 'note', text: t('director.desc') }),
     avral,
+    h('div', { class: 'section-head' }, h('h3', { text: t('task.title') })),
+    taskCard,
+    h('div', { class: 'section-head' }, h('h3', { text: t('inv.title') })),
+    active,
+    inv,
     h('div', { class: 'card' }, h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: t('director.desk') })), desk.el),
   );
   return {
@@ -294,11 +407,39 @@ export function directorPanel(ctx: Ctx): Panel {
       avral.disabled = !g.canAvral();
       if (g.state.directorDesk > 0) desk.set({ label: t('director.deskDone'), enabled: false, done: true });
       else desk.set({ label: t('free'), enabled: true });
+
+      const ds = g.state.director;
+      const task = ds.task;
+      const now = Date.now();
+      const bar = tBar.firstChild as HTMLElement;
+      if (!task) {
+        tTitle.textContent = t('task.next', { time: duration(Math.max(0, Math.ceil((ds.nextOfferAt - now) / 1000))) });
+        tInfo.textContent = '';
+        tBar.style.display = 'none';
+        tBtns.style.display = 'none';
+      } else if (task.endsAt === 0) {
+        tTitle.textContent = taskText(task.kind, task.target);
+        tInfo.textContent = t('task.offer', { tier: tr(TIER_NAMES[task.tier]), time: duration(task.duration) });
+        tBar.style.display = 'none';
+        tBtns.style.display = '';
+      } else {
+        const prog = taskProgress(g, task);
+        tTitle.textContent = `${taskText(task.kind, task.target)} · ${fmt(Math.min(prog, task.target))}/${fmt(task.target)}`;
+        tInfo.textContent = `${tr(TIER_NAMES[task.tier])} · ${t('task.left', { time: duration(Math.max(0, Math.ceil((task.endsAt - now) / 1000))) })}`;
+        tBar.style.display = '';
+        bar.style.width = `${Math.min(100, (prog / task.target) * 100)}%`;
+        tBtns.style.display = 'none';
+      }
+      active.replaceChildren(
+        ...ds.active.map((a) => h('div', { class: 'perk-active' }, h('span', { text: `${t('inv.active')}: ${perkTitle(a.kind, a.tier)}` }), h('b', { text: duration(Math.ceil(a.left)) }))),
+      );
+      drawInv();
     },
   };
 }
 
-export function notePanel(def: RoomDef): Panel {
+export function notePanel(ctx: Ctx, def: RoomDef): Panel {
+  if (def.kind === 'toilet' && !ctx.game.roomOpen('toilet')) return roomLockedPanel(ctx, 'toilet');
   const key = def.kind === 'hall' ? 'hall.desc' : 'toilet.desc';
   return { title: t(`room.${def.id}` as Key), body: h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t(key) })), refresh() {} };
 }

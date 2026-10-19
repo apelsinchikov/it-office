@@ -11,7 +11,7 @@ export interface Theme {
   wall: number;
   wallTop: number;
   window: number;
-  /** Ковры: поддержка, разработка, тестирование, аналитики, сисадмины, директор. */
+  /** Ковры по номерам отделов (сисадмины, поддержка, аналитики, разработка, тестирование) и директор. */
   carpets: number[];
   /** Пол зоны отдыха, холла и туалета. */
   rest: number;
@@ -31,7 +31,7 @@ export const THEMES: Record<CompanyStyle, Theme> = {
     wall: 0xf6ead6,
     wallTop: 0xe0cfb2,
     window: 0x9fd8ff,
-    carpets: [0xd99a8f, 0x9cc48a, 0xe0c879, 0x8fa9cf, 0xb59ac4, 0xe3b36b],
+    carpets: [0xb59ac4, 0xd99a8f, 0x8fa9cf, 0x9cc48a, 0xe0c879, 0xe3b36b],
     rest: 0x8ccaca,
     hall: 0xc9b38f,
     toilet: 0xcfd3dd,
@@ -46,7 +46,7 @@ export const THEMES: Record<CompanyStyle, Theme> = {
     wall: 0x2f3c6b,
     wallTop: 0x24305a,
     window: 0xbfe3ff,
-    carpets: [0x7b2d3a, 0x2d5b46, 0x8a6d2b, 0x2d4a7b, 0x4a3b6b, 0x6b2d2d],
+    carpets: [0x4a3b6b, 0x7b2d3a, 0x2d4a7b, 0x2d5b46, 0x8a6d2b, 0x6b2d2d],
     rest: 0x5b6b8a,
     hall: 0xd9c38a,
     toilet: 0xdfe3ea,
@@ -61,7 +61,7 @@ export const THEMES: Record<CompanyStyle, Theme> = {
     wall: 0x3b2b5a,
     wallTop: 0x2e2147,
     window: 0x8b6cff,
-    carpets: [0xff5fa2, 0x2fbfae, 0xffb13b, 0x4fb3ff, 0x8b6cff, 0xff7a45],
+    carpets: [0x8b6cff, 0xff5fa2, 0x4fb3ff, 0x2fbfae, 0xffb13b, 0xff7a45],
     rest: 0x2fbfae,
     hall: 0x6b6f7e,
     toilet: 0xa9aebd,
@@ -76,7 +76,7 @@ export const THEMES: Record<CompanyStyle, Theme> = {
     wall: 0x1e2240,
     wallTop: 0x161a33,
     window: 0x0a0d24,
-    carpets: [0x3b4b8a, 0x2b6b6b, 0x6b5b2b, 0x4b3b7a, 0x6b2b4b, 0x2b4b6b],
+    carpets: [0x6b2b4b, 0x3b4b8a, 0x4b3b7a, 0x2b6b6b, 0x6b5b2b, 0x2b4b6b],
     rest: 0x2b5b7a,
     hall: 0x454b63,
     toilet: 0x6b718a,

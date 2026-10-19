@@ -1,6 +1,6 @@
 // Задания: ежедневные (3 в день, сброс в полночь по Москве), цепочка открытий, долгие.
 
-import { DEPT_COUNT, DESKS } from './config';
+import { DEPTS, DEPT_COUNT, DESKS } from './config';
 import { moscowDayKey } from './events';
 import type { Game } from './game';
 import type { DailyQuest, Stats } from './state';
@@ -95,21 +95,29 @@ interface ChainDef {
 }
 
 const anyLevel = (g: Game, min: number): boolean => g.run.levels.some((row) => row.some((l) => l >= min));
-const anySingle = (g: Game, j: number): boolean => g.run.singles[0].some((s) => s[j]);
+/** Куплено ли украшение id (например, кружка) хоть у кого-нибудь. */
+const anySingle = (g: Game, id: string): boolean =>
+  DEPTS.some((def, d) => {
+    const j = (def.singles as readonly string[]).indexOf(id);
+    return j >= 0 && g.run.singles[d].some((s) => s[j]);
+  });
 
 export const CHAIN: ChainDef[] = [
-  { id: 'lvl5', title: t('Прокачайте первого сотрудника до 5 уровня', 'Level your first employee to 5'), check: (g) => g.level(0, 0) >= 5 },
+  { id: 'lvl5', title: t('Прокачайте первого сисадмина до 5 уровня', 'Level your first sysadmin to 5'), check: (g) => g.level(0, 0) >= 5 },
   { id: 'buy25', title: t('Купите 25 уровней', 'Buy 25 levels'), check: (g) => g.state.stats.levelsBought >= 25 },
-  { id: 'hire2', title: t('Наймите второго сотрудника поддержки', 'Hire a second support agent'), check: (g) => g.isHired(0, 1) },
+  { id: 'hire2', title: t('Наймите второго сисадмина', 'Hire a second sysadmin'), check: (g) => g.isHired(0, 1) },
   { id: 'furn1', title: t('Купите первую мебель', 'Buy your first furniture'), check: (g) => g.state.stats.furnBought >= 1 },
-  { id: 'mug', title: t('Купите кружку кофе', 'Buy a coffee mug'), check: (g) => anySingle(g, 1) },
-  { id: 'dev', title: t('Откройте отдел разработки', 'Open the development department'), check: (g) => g.isUnlocked(1) },
+  { id: 'support', title: t('Откройте поддержку', 'Open support'), check: (g) => g.isUnlocked(1) },
+  { id: 'mug', title: t('Купите кружку кофе', 'Buy a coffee mug'), check: (g) => anySingle(g, 'mug') },
+  { id: 'director', title: t('Откройте кабинет директора IT', "Open the IT director's office"), check: (g) => g.roomOpen('director') },
+  { id: 'rest', title: t('Откройте зону отдыха', 'Open the lounge'), check: (g) => g.roomOpen('rest') },
   { id: 'coffee', title: t('Купите кофемашину', 'Buy a coffee machine'), check: (g) => g.run.rest.coffee >= 1 },
-  { id: 'lead', title: t('Наймите руководителя поддержки', 'Hire a support lead'), check: (g) => g.run.managers[0] },
-  { id: 'qa', title: t('Откройте тестирование', 'Open QA'), check: (g) => g.isUnlocked(2) },
+  { id: 'analysts', title: t('Откройте аналитиков', 'Open the analysts'), check: (g) => g.isUnlocked(2) },
+  { id: 'lead', title: t('Наймите руководителя сисадминов', 'Hire a sysadmin lead'), check: (g) => g.run.managers[0] },
   { id: 'reorg', title: t('Проведите первую реорганизацию', 'Do your first reorganization'), check: (g) => g.state.reorgs >= 1 },
-  { id: 'analysts', title: t('Откройте аналитиков', 'Open the analysts'), check: (g) => g.isUnlocked(3) },
-  { id: 'sysadmins', title: t('Откройте сисадминов', 'Open the sysadmins'), check: (g) => g.isUnlocked(4) },
+  { id: 'toilet', title: t('Откройте туалет', 'Open the restroom'), check: (g) => g.roomOpen('toilet') },
+  { id: 'dev', title: t('Откройте отдел разработки', 'Open the development department'), check: (g) => g.isUnlocked(3) },
+  { id: 'qa', title: t('Откройте тестирование', 'Open QA'), check: (g) => g.isUnlocked(4) },
   { id: 'games', title: t('Купите все 10 игр для приставки', 'Buy all 10 console games'), check: (g) => g.run.rest.games >= 10 },
 ];
 
@@ -127,7 +135,7 @@ export function claimChain(g: Game): number {
   const reward = chainReward(g);
   g.grant(reward, 'quest');
   g.state.quests.chain++;
-  g.state.bonusPhrases = Math.min(13, g.state.bonusPhrases + 1);
+  g.state.bonusPhrases = Math.min(13, g.state.bonusPhrases + 1); // 13 бонусных фраз на 16 шагов цепочки
   return reward;
 }
 

@@ -1,6 +1,5 @@
 // Модульные персонажи в стиле Б и их анимация.
 // Все координаты — в «единицах персонажа» рисунка 120×220 (как на холсте). Ноги стоят в точке (60, 204).
-// Три вида: спереди, спиной и сбоку (лицом вправо, влево — зеркально).
 
 import { Container, Graphics } from 'pixi.js';
 import { OUT, circle, ellipse, line, p, rect, shade, stroke } from './draw';
@@ -354,7 +353,6 @@ function accBack(g: Graphics, look: Look): void {
 }
 
 interface Rig {
-  kind: 'front' | 'back' | 'side';
   view: Container;
   legL: Container;
   legR: Container;
@@ -421,14 +419,14 @@ function buildFront(look: Look, withLegs: boolean): Rig {
   head.addChild(acc);
   bob.addChild(head);
   view.addChild(bob);
-  return { kind: 'front', view, legL, legR, bob, armL, armR, torso, head, backHair, eyes, mouth };
+  return { view, legL, legR, bob, armL, armR, torso, head, backHair, eyes, mouth };
 }
 
-function buildBack(look: Look, withLegs = true): Rig {
+function buildBack(look: Look): Rig {
   const view = new Container();
   const legL = wrap(legsG(look, 'L', true), 52, 166);
   const legR = wrap(legsG(look, 'R', true), 68, 166);
-  if (withLegs) view.addChild(legL, legR);
+  view.addChild(legL, legR);
   const bob = new Container();
   const armL = wrap(armG(look, 'L'), 34, 114);
   const armR = wrap(armG(look, 'R'), 86, 114);
@@ -461,202 +459,12 @@ function buildBack(look: Look, withLegs = true): Rig {
   const head = wrap(g, 60, 98);
   bob.addChild(head);
   view.addChild(bob);
-  return { kind: 'back', view, legL, legR, bob, armL, armR, torso, head, backHair: null, eyes: null, mouth: null };
-}
-
-// ---------- вид сбоку (лицом вправо; влево — зеркально) ----------
-
-const SIDE_TORSO = 'M44 120 Q44 104 58 104 L64 104 Q78 106 78 122 L78 170 L44 170 Z';
-
-function sideLeg(look: Look, front: boolean): Graphics {
-  const g = new Graphics();
-  if (look.outfit === 'director') {
-    rect(g, front ? 62 : 54, 192, 3, 12, 0, { fill: 0xb5121d, line: 1.5 });
-    p(g, front ? 'M58 198 Q60 192 70 192 L76 198 L74 203 L60 203 Z' : 'M50 198 Q52 192 62 192 L68 198 L66 203 L52 203 Z', front ? look.shoes : shade(look.shoes, -0.2));
-    return g;
-  }
-  const pants = front ? look.pants : shade(look.pants, -0.18);
-  rect(g, 53, 164, 14, 32, 5, pants);
-  if (look.outfit === 'sysadmin' && front) rect(g, 55, 174, 9, 9, 2, { fill: shade(look.pants, -0.15), line: 2 });
-  rect(g, 52, 190, 24, 12, 6, front ? look.shoes : shade(look.shoes, -0.15));
-  return g;
-}
-
-function sideArm(look: Look, front: boolean): Graphics {
-  const g = new Graphics();
-  const sleeve0 = look.outfit === 'analyst' ? 0xf4f4f8 : look.color;
-  const sleeve = front ? sleeve0 : shade(sleeve0, -0.18);
-  const skin = front ? look.skin : shade(look.skin, -0.12);
-  if (look.outfit === 'sysadmin') {
-    rect(g, 55, 122, 12, 34, 6, skin);
-    rect(g, 54, 112, 14, 20, 7, sleeve);
-  } else if (look.outfit === 'director') {
-    rect(g, 55, 110, 11, 50, 6, sleeve);
-  } else {
-    rect(g, 54, 112, 14, 44, 7, sleeve);
-  }
-  circle(g, 61, look.outfit === 'director' ? 162 : 158, 6.5, skin);
-  return g;
-}
-
-function sideTorso(look: Look): Graphics {
-  const g = new Graphics();
-  const c = look.color;
-  switch (look.outfit) {
-    case 'director':
-      p(g, 'M48 114 Q48 102 58 102 L64 102 Q74 104 74 116 L76 136 L88 196 L36 196 L46 136 Z', c);
-      rect(g, 45, 132, 32, 7, 2, shade(c, -0.35));
-      return g;
-    case 'analyst':
-      p(g, SIDE_TORSO, c);
-      p(g, 'M70 106 Q78 108 78 122 L78 150 L70 150 Z', 0xf4f4f8);
-      p(g, 'M73 110 L77 112 L77 138 L74 142 Z', 0xe8173a);
-      return g;
-    case 'manager':
-      p(g, SIDE_TORSO, c);
-      p(g, 'M70 106 Q78 108 78 122 L78 140 L71 140 Z', 0xffffff);
-      return g;
-    case 'dev':
-      p(g, SIDE_TORSO, c);
-      p(g, 'M40 112 Q36 94 52 94 Q60 96 58 106 Z', shade(c, -0.18));
-      line(g, [72, 112, 72, 126], 0xffffff, 2.5);
-      return g;
-    case 'qa': {
-      p(g, SIDE_TORSO, c);
-      const sh = shade(c, -0.22);
-      for (const x of [54, 66]) line(g, [x, 108, x, 167], sh, 2.5);
-      for (const y of [128, 146]) line(g, [46, y, 76, y], sh, 2.5);
-      stroke(g, SIDE_TORSO, OUT, 3);
-      return g;
-    }
-    case 'sysadmin':
-      p(g, SIDE_TORSO, c);
-      return g;
-    default:
-      p(g, SIDE_TORSO, c);
-      if (look.outfit === 'support') rect(g, 44, 162, 34, 7, 0, OUT);
-      return g;
-  }
-}
-
-function sideHair(g: Graphics, look: Look, behind: boolean): void {
-  const c = look.hairColor;
-  const h = look.hair;
-  if (behind) {
-    // то, что за головой: длинные волосы, пучок, афро
-    if (h === 9) circle(g, 54, 56, 38, c);
-    if (h === 6) circle(g, 34, 40, 13, c);
-    if (h === 5) p(g, 'M32 60 Q22 120 40 132 L58 132 Q50 100 52 78 Z', c);
-    if (h === 4) p(g, 'M32 60 Q24 100 38 108 L56 108 Q50 92 52 78 Z', c);
-    if (h === 3 || h === 10) p(g, 'M34 62 Q26 100 36 116 L48 116 Q44 96 50 78 Z', c);
-    return;
-  }
-  if (h === 7) {
-    p(g, 'M32 64 Q32 82 42 86 L48 72 Z', c);
-    ellipse(g, 60, 44, 9, 4, { fill: 0xffffff, alpha: 0.45, line: 0 });
-    return;
-  }
-  if (h === 2) {
-    for (const [x, y, r] of [
-      [36, 56, 9],
-      [40, 42, 10],
-      [52, 34, 11],
-      [68, 34, 10],
-      [80, 42, 8],
-    ])
-      circle(g, x, y, r, c);
-    return;
-  }
-  if (h === 9) {
-    p(g, 'M34 62 Q36 40 62 40 Q84 42 88 56 Q74 50 64 54 Q56 64 50 70 Z', c);
-    return;
-  }
-  // короткая или длинная: шапка волос сверху и сзади, лицо справа открыто
-  p(g, 'M30 72 Q26 32 62 32 Q88 34 91 58 Q80 46 70 49 Q66 58 56 58 Q50 62 50 78 Q40 84 30 72 Z', c);
-  if (h === 11) p(g, 'M60 34 Q80 20 94 34 Q86 40 72 40 Z', c);
-}
-
-function sideAcc(g: Graphics, look: Look): void {
-  for (const a of look.acc) {
-    switch (a) {
-      case 'glasses':
-        circle(g, 77, 69, 8, { fill: 0xffffff, alpha: 0.25 });
-        line(g, [69, 68, 55, 66]);
-        break;
-      case 'beard':
-        p(g, 'M50 80 Q54 102 70 104 Q86 102 89 84 Q80 92 68 90 Q58 90 50 80 Z', look.hairColor);
-        break;
-      case 'cap':
-        p(g, 'M30 62 Q30 30 60 30 Q90 30 90 58 Z', 0xff7a45);
-        p(g, 'M84 54 Q104 54 110 60 Q98 66 84 62 Z', 0xe0602c);
-        break;
-      case 'headphones':
-        stroke(g, 'M54 64 Q48 22 70 26', OUT, 7);
-        stroke(g, 'M54 64 Q48 22 70 26', 0x8b6cff, 3);
-        rect(g, 44, 56, 16, 24, 7, 0x8b6cff);
-        break;
-      case 'headset':
-        stroke(g, 'M54 64 Q50 26 70 28', OUT, 5);
-        rect(g, 46, 60, 12, 17, 5, OUT);
-        stroke(g, 'M54 76 Q62 92 80 88', OUT, 3);
-        circle(g, 81, 88, 3.5, OUT);
-        break;
-    }
-  }
-}
-
-function buildSide(look: Look): Rig {
-  const view = new Container();
-  const legL = wrap(sideLeg(look, false), 60, 166);
-  const legR = wrap(sideLeg(look, true), 60, 166);
-  view.addChild(legL, legR);
-  const bob = new Container();
-  const armL = wrap(sideArm(look, false), 61, 114);
-  const armR = wrap(sideArm(look, true), 61, 114);
-  const torso = wrap(sideTorso(look), 60, 170);
-  const neck = new Graphics();
-  rect(neck, 54, 88, 13, 18, 5, look.skin);
-  const behind = new Graphics();
-  sideHair(behind, look, true);
-  const backHair = wrap(behind, 60, 98);
-  bob.addChild(backHair, armL, torso, wrap(neck, 60, 106));
-
-  const headG = new Graphics();
-  circle(headG, 90, 73, 4.5, look.skin); // нос
-  circle(headG, 60, 66, 30, look.skin);
-  circle(headG, 54, 70, 5, look.skin); // ухо
-  sideHair(headG, look, false);
-  ellipse(headG, 79, 80, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
-  if (look.lashes) line(headG, [80, 63, 84, 59], OUT, 2);
-  const head = wrap(headG, 60, 98);
-  const eyesG = new Graphics();
-  ellipse(eyesG, 77, 69, 3.6, 5.2, { fill: OUT, line: 0 });
-  circle(eyesG, 78.5, 66.5, 1.4, { fill: 0xffffff, line: 0 });
-  const eyes = wrap(eyesG, 77, 69);
-  head.addChild(eyes);
-  const mouth = new Graphics();
-  if (look.outfit === 'director') p(mouth, 'M78 85 Q83 88 87 84 Q82 86 78 85 Z', { fill: 0xe8173a, line: 0 });
-  else stroke(mouth, 'M78 85 Q82 88 87 84', OUT, 2.5);
-  mouth.pivot.set(82, 85);
-  mouth.position.set(82, 85);
-  head.addChild(mouth);
-  const acc = new Graphics();
-  sideAcc(acc, look);
-  head.addChild(acc);
-  bob.addChild(head, armR);
-  view.addChild(bob);
-  return { kind: 'side', view, legL, legR, bob, armL, armR, torso, head, backHair, eyes, mouth };
+  return { view, legL, legR, bob, armL, armR, torso, head, backHair: null, eyes: null, mouth: null };
 }
 
 export type Mode = 'idle' | 'walk' | 'sit' | 'repair' | 'talk';
-/** Направление: 0 — к камере (вниз), 1 — влево, 2 — от камеры (вверх), 3 — вправо. */
+/** Направление: 0 — вправо-вниз, 1 — влево-вниз, 2 — вправо-вверх, 3 — влево-вверх. */
 export type Dir = 0 | 1 | 2 | 3;
-
-/** Направление по смещению на экране: по горизонтали — вид сбоку, по вертикали — спереди или спиной. */
-export function dirFrom(dx: number, dy: number): Dir {
-  if (Math.abs(dx) > Math.abs(dy) * 1.1) return dx > 0 ? 3 : 1;
-  return dy >= 0 ? 0 : 2;
-}
 
 const DEG = Math.PI / 180;
 
@@ -666,8 +474,8 @@ export class Character {
   mode: Mode = 'idle';
   /** Скорость анимации (на «Аврале» печатают быстрее). */
   speed = 1;
-  private readonly rigs: Partial<Record<Rig['kind'], Rig>> = {};
-  private cur: Rig;
+  private front: Rig;
+  private back: Rig | null = null;
   private readonly shadow = new Graphics();
   private dir: Dir = 0;
   private phase: number;
@@ -678,8 +486,6 @@ export class Character {
     readonly look: Look,
     private readonly rng: () => number,
     readonly seated = false,
-    /** Сидит спиной к камере (на диване перед телевизором). */
-    readonly seatedBack = false,
   ) {
     this.phase = rng() * Math.PI * 2;
     this.breath = rng() * Math.PI * 2;
@@ -689,33 +495,37 @@ export class Character {
       ellipse(this.shadow, 60, 208, 28, 6, { fill: OUT, alpha: 0.2, line: 0 });
       this.root.addChild(this.shadow);
     }
-    this.cur = seatedBack ? buildBack(look, false) : buildFront(look, !seated);
-    this.rigs[this.cur.kind] = this.cur;
-    this.root.addChild(this.cur.view);
-    if (seatedBack) this.dir = 2;
+    this.front = buildFront(look, !seated);
+    this.root.addChild(this.front.view);
     if (seated) this.mode = 'sit';
   }
 
   setDir(dir: Dir): void {
-    if (dir === this.dir || this.seated) return;
+    if (dir === this.dir) return;
     this.dir = dir;
-    const kind: Rig['kind'] = dir === 0 ? 'front' : dir === 2 ? 'back' : 'side';
-    let rig = this.rigs[kind];
-    if (!rig) {
-      rig = kind === 'front' ? buildFront(this.look, true) : kind === 'back' ? buildBack(this.look) : buildSide(this.look);
-      this.rigs[kind] = rig;
-      this.root.addChild(rig.view);
+    const backView = dir >= 2;
+    if (backView && !this.back) {
+      this.back = buildBack(this.look);
+      this.root.addChild(this.back.view);
     }
-    for (const r of Object.values(this.rigs)) if (r) r.view.visible = r === rig;
-    // вбок влево — зеркально
-    const flip = dir === 1 ? -1 : 1;
-    rig.view.scale.x = flip;
-    rig.view.x = flip < 0 ? 120 : 0;
-    this.cur = rig;
+    this.front.view.visible = !backView;
+    if (this.back) this.back.view.visible = backView;
+    // зеркалим влево
+    const flip = dir === 1 || dir === 3 ? -1 : 1;
+    this.front.view.scale.x = flip;
+    this.front.view.x = flip < 0 ? 120 : 0;
+    if (this.back) {
+      this.back.view.scale.x = flip;
+      this.back.view.x = flip < 0 ? 120 : 0;
+    }
+  }
+
+  private rig(): Rig {
+    return this.dir >= 2 && this.back ? this.back : this.front;
   }
 
   update(dt: number): void {
-    const r = this.cur;
+    const r = this.rig();
     this.breath += dt * ((Math.PI * 2) / 3.4);
     const b = (1 - Math.cos(this.breath)) / 2; // 0..1 мягко
     // моргание
@@ -733,34 +543,25 @@ export class Character {
       r.legR.y = r.legR.pivot.y;
       r.armL.rotation = r.armR.rotation = 0;
       r.bob.y = 0;
+      this.front.view.rotation = 0;
     };
 
     if (this.mode === 'walk') {
       this.phase += dt * ((Math.PI * 2) / 0.9) * this.speed;
       const ph = this.phase;
       const lift = (x: number): number => Math.max(0, Math.sin(x));
-      if (r.kind === 'side') {
-        // сбоку ноги и руки качаются вперёд-назад
-        r.legL.rotation = 24 * DEG * Math.cos(ph);
-        r.legR.rotation = 24 * DEG * Math.cos(ph + Math.PI);
-        r.legL.y = r.legL.pivot.y - 2 * lift(ph);
-        r.legR.y = r.legR.pivot.y - 2 * lift(ph + Math.PI);
-        r.armL.rotation = 26 * DEG * Math.cos(ph + Math.PI);
-        r.armR.rotation = 26 * DEG * Math.cos(ph);
-      } else {
-        r.legL.y = r.legL.pivot.y - 6 * lift(ph);
-        r.legR.y = r.legR.pivot.y - 6 * lift(ph + Math.PI);
-        r.legL.rotation = 5 * DEG * Math.cos(ph);
-        r.legR.rotation = 5 * DEG * Math.cos(ph + Math.PI);
-        r.armL.rotation = 14 * DEG * Math.sin(ph + Math.PI);
-        r.armR.rotation = 14 * DEG * Math.sin(ph);
-      }
+      r.legL.y = r.legL.pivot.y - 6 * lift(ph);
+      r.legR.y = r.legR.pivot.y - 6 * lift(ph + Math.PI);
+      r.legL.rotation = 5 * DEG * Math.cos(ph);
+      r.legR.rotation = 5 * DEG * Math.cos(ph + Math.PI);
+      r.armL.rotation = 14 * DEG * Math.sin(ph + Math.PI);
+      r.armR.rotation = 14 * DEG * Math.sin(ph);
       r.bob.y = -3 * ((1 - Math.cos(2 * ph)) / 2);
       r.head.rotation = 2.5 * DEG * Math.sin(ph - 0.6);
       r.head.y = r.head.pivot.y;
       r.torso.scale.y = 1;
       this.shadow.scale.x = 1 - 0.1 * ((1 - Math.cos(2 * ph)) / 2);
-      this.root.rotation = (r.kind === 'side' ? 0.8 : 1.5) * DEG * Math.sin(ph);
+      this.root.rotation = 1.5 * DEG * Math.sin(ph);
     } else {
       reset();
       this.root.rotation = 0;
@@ -774,7 +575,7 @@ export class Character {
       } else if (this.mode === 'repair') {
         this.phase += dt * 7 * this.speed;
         r.armR.rotation = -40 * DEG + 18 * DEG * Math.sin(this.phase);
-        r.armL.rotation = 10 * DEG + 6 * DEG * Math.sin(this.phase * 0.5);
+        r.armL.rotation = -10 * DEG + 6 * DEG * Math.sin(this.phase * 0.5);
       } else if (this.mode === 'talk') {
         this.phase += dt * 10;
         if (r.mouth) r.mouth.scale.y = 1 + 0.4 * Math.max(0, Math.sin(this.phase));

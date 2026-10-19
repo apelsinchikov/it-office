@@ -11,6 +11,7 @@ import {
   nextMilestone,
   payoutIncome,
 } from './economy';
+import { acceptTask, directorTick, perkPower, tickPerks, usePerk } from './director';
 import { eventIdAt } from './events';
 import { formatNumber } from './format';
 import { Game } from './game';
@@ -25,7 +26,7 @@ describe('формулы', () => {
     expect(levelCost(0, 0, 0)).toBeCloseTo(3);
     expect(levelCost(0, 0, 1)).toBeCloseTo(3.21);
     expect(levelCost(0, 1, 0)).toBeCloseTo(30);
-    expect(levelCost(1, 0, 0)).toBeCloseTo(3000);
+    expect(levelCost(1, 0, 0)).toBeCloseTo(30000);
   });
 
   it('цена n уровней равна сумме по одному', () => {
@@ -55,12 +56,12 @@ describe('формулы', () => {
     expect(nextMilestone(500)).toBe(600);
     expect(payoutIncome(0, 0, 1)).toBe(1);
     expect(payoutIncome(0, 0, 25)).toBe(50);
-    expect(payoutIncome(1, 0, 1)).toBe(300);
+    expect(payoutIncome(1, 0, 1)).toBe(3000);
     expect(payoutIncome(0, 1, 1)).toBe(6);
   });
 
   it('отдел 2 стоит 3M, Гранты с 10 миллиардов', () => {
-    expect(deptUnlockCost(1)).toBeCloseTo(3.003e6, -2);
+    expect(deptUnlockCost(1)).toBeCloseTo(3.03e6, -2);
     expect(grantsFor(9e9, 0)).toBe(0);
     expect(grantsFor(1e10, 0)).toBe(2);
     expect(grantsFor(1e10 * 5.7 ** 1, 0)).toBe(4);
@@ -120,6 +121,8 @@ describe('игра', () => {
     const base = g.incomePerSec();
     expect(g.buyFurn(0, 0, 0)).toBe(true);
     expect(g.incomePerSec()).toBeCloseTo(base * 1.1);
+    expect(g.buyRest('coffee')).toBe(false); // зона отдыха ещё закрыта
+    g.run.rooms.rest = true;
     expect(g.buyRest('coffee')).toBe(true);
     expect(g.incomePerSec()).toBeCloseTo(base * 1.1 * 1.03);
     expect(g.unlock(1)).toBe(true);
@@ -138,6 +141,8 @@ describe('игра', () => {
     expect(g.applyOffline(10 * 3600).seconds).toBe(7200);
     expect(g.run.coins).toBeCloseTo(720);
     const inc = g.incomePerSec();
+    expect(g.startAvral()).toBe(false); // «Аврал» объявляет директор IT
+    g.run.rooms.director = true;
     expect(g.startAvral()).toBe(true);
     expect(g.incomePerSec()).toBeCloseTo(inc * 3);
     expect(g.startAvral()).toBe(false);
@@ -209,11 +214,51 @@ describe('задания, события, сохранения', () => {
     expect(eventIdAt(Date.UTC(2026, 9, 14, 12))).toBe(null);
   });
 
-  it('сохранение этапа 1 переносится', () => {
+  it('сохранение этапа 1 переносится: монеты остаются, офис заново', () => {
     const s = normalize({ v: 1, coins: 55, lifetime: 100, levels: [[7, 0, 0, 0, 0, 0]], savedAt: 5 }, 10);
     expect(s?.run.coins).toBe(55);
-    expect(s?.run.levels[0][0]).toBe(7);
-    expect(s?.v).toBe(2);
+    expect(s?.run.levels[0][0]).toBe(1);
+    expect(s?.v).toBe(3);
     expect(normalize({ v: 99 })).toBe(null);
+  });
+
+  it('сохранение v2: Гранты и улучшения остаются, отделы переезжают', () => {
+    const s = normalize({ v: 2, grants: 40, shop: { speed0: 3, income4: 2 }, run: { coins: 1e9 } }, 10);
+    expect(s?.grants).toBe(40);
+    expect(s?.run.coins).toBe(0);
+    expect(s?.shop.speed1).toBe(3);
+    expect(s?.shop.income0).toBe(2);
+  });
+});
+
+describe('директор IT', () => {
+  it('задание → перк в инвентарь → временное ускорение выплат', () => {
+    const g = fresh();
+    expect(directorTick(g, 0, () => 0)).toBe(null); // кабинет ещё закрыт
+    g.run.rooms.director = true;
+    expect(directorTick(g, 0, () => 0)).toBe('offered');
+    const task = g.state.director.task!;
+    expect(task.kind).toBe('levels');
+    expect(task.tier).toBe(0);
+    expect(acceptTask(g, 0)).toBe(true);
+    g.state.stats.levelsBought += task.target;
+    expect(directorTick(g, 1000, () => 0)).toBe('done');
+    expect(g.state.director.inventory['speed:0']).toBe(1);
+    const t0 = g.payoutTime(0);
+    expect(usePerk(g, 'speed', 0)).toBe(true);
+    expect(perkPower(g, 'speed')).toBeCloseTo(0.2);
+    expect(g.payoutTime(0)).toBeCloseTo(t0 * 0.8);
+    tickPerks(g, 61);
+    expect(perkPower(g, 'speed')).toBe(0);
+  });
+
+  it('невыполненное задание просто пропадает', () => {
+    const g = fresh();
+    g.run.rooms.director = true;
+    directorTick(g, 0, () => 0);
+    acceptTask(g, 0);
+    expect(directorTick(g, 301_000, () => 0)).toBe('expired');
+    expect(g.state.director.task).toBe(null);
+    expect(Object.keys(g.state.director.inventory).length).toBe(0);
   });
 });

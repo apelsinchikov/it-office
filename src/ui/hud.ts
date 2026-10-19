@@ -4,6 +4,7 @@ import { bestPurchase, type Purchase } from '../game/advisor';
 import { formatNumber } from '../game/format';
 import type { Game, GameEvent } from '../game/game';
 import { claimableCount } from '../game/quests';
+import { perkTitle } from './panels';
 import { duration, t, type Key } from '../i18n';
 import type { RoomDef } from '../scene/layout';
 import { ICONS, h } from './dom';
@@ -55,6 +56,8 @@ export class Hud {
   private readonly rate: HTMLElement;
   private readonly grantsChip: HTMLButtonElement;
   private readonly eventChip: HTMLElement;
+  /** Действующие перки директора. */
+  private readonly perksEl: HTMLElement;
   private readonly avralBtn: HTMLButtonElement;
   private readonly avralLabel: HTMLElement;
   private readonly sheetEl: HTMLElement;
@@ -92,6 +95,7 @@ export class Hud {
     this.grantsChip.addEventListener('click', () => this.toggle({ kind: 'grants' }));
     this.eventChip = h('span', { class: 'chip event-chip' });
     this.eventChip.style.display = 'none';
+    this.perksEl = h('div', { class: 'perks' });
     const top = h(
       'div',
       { class: 'topbar' },
@@ -137,7 +141,7 @@ export class Hud {
     this.toasts = h('div', { class: 'toasts', attrs: { 'aria-live': 'polite' } });
     this.modal = h('div', { class: 'modal hidden' });
     this.topEl = top;
-    root.append(top, this.toasts, this.avralBtn, this.sheetEl, this.nav, this.modal);
+    root.append(top, this.perksEl, this.toasts, this.avralBtn, this.sheetEl, this.nav, this.modal);
 
     this.ctx = {
       game,
@@ -165,7 +169,7 @@ export class Hud {
 
   private onGame(e: GameEvent): void {
     // структура панели меняется — перестраиваем
-    if (['hire', 'unlock', 'manager', 'reorg', 'company'].includes(e.type) && this.sheet) this.rebuild();
+    if (['hire', 'unlock', 'manager', 'reorg', 'company', 'room'].includes(e.type) && this.sheet) this.rebuild();
   }
 
   setHidden(hidden: boolean): void {
@@ -185,7 +189,7 @@ export class Hud {
   bottomInset(): number {
     if (this.hidden) return 210; // карточка обучения
     const navH = this.nav.offsetHeight || 64;
-    return this.sheet ? this.sheetEl.offsetHeight + navH + 8 : navH + 90;
+    return navH + 90;
   }
 
   private build(s: Sheet): Panel {
@@ -196,7 +200,7 @@ export class Hud {
         if (def.kind === 'dept') return deptPanel(ctx, def.dept!);
         if (def.kind === 'rest') return restPanel(ctx);
         if (def.kind === 'director') return directorPanel(ctx);
-        return notePanel(def);
+        return notePanel(ctx, def);
       }
       case 'grants':
         return grantsPanel(ctx);
@@ -293,6 +297,8 @@ export class Hud {
     this.avralBtn.style.setProperty('--p', `${(pc * 100).toFixed(1)}%`);
     this.avralBtn.classList.toggle('ready', g.canAvral());
     this.avralBtn.classList.toggle('active', g.isAvral());
+    // «Аврал» объявляет директор IT — до его кабинета кнопки нет
+    this.avralBtn.style.display = g.roomOpen('director') && !this.sheet ? '' : 'none';
 
     if (now - this.last < 200) return;
     this.last = now;
@@ -300,6 +306,9 @@ export class Hud {
     this.rate.textContent = `+${formatNumber(g.incomePerSec())}${t('perSec')}`;
     this.grantsChip.innerHTML = `${ICONS.star}<span>${formatNumber(g.state.grants)}</span>`;
     this.grantsChip.classList.toggle('pulse', g.reorgIsGood());
+    this.perksEl.replaceChildren(
+      ...g.state.director.active.map((a) => h('span', { class: 'chip perk-chip', text: `${perkTitle(a.kind, a.tier)} · ${duration(Math.ceil(a.left))}` })),
+    );
     const n = claimableCount(g);
     this.questBadge.textContent = n ? String(n) : '';
     this.questBadge.style.display = n ? '' : 'none';

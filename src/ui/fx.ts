@@ -31,6 +31,7 @@ export class Fx {
   private time = 0;
   private tickets = new Map<number, { el: HTMLButtonElement; d: number; k: number }>();
   private marks: HTMLDivElement[] = [];
+  private badges: HTMLDivElement[] = [];
 
   onTicket: (reward: number, d: number, k: number) => void = () => {};
   onPhrase: (id: string) => void = () => {};
@@ -212,10 +213,17 @@ export class Fx {
     const taken: Box[] = [];
     const hit = (a: Box, c: Box): boolean => a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h;
     const s = Math.max(0.6, Math.min(1.2, this.scale() * 1.6));
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    /** Точка за краем экрана: такие пузыри и тикеты прячем, а не прижимаем к краю. */
+    const off = (p: Pt, pad = 0): boolean => p.x < -pad || p.x > W + pad || p.y < topLimit() - pad || p.y > H + pad;
     for (const t of this.tickets.values()) {
       const a = this.office.ticketAnchor(t.d, t.k);
       if (!a) continue;
       const p = this.toScreen(a);
+      const hide = off(p, 10);
+      t.el.style.visibility = hide ? 'hidden' : '';
+      if (hide) continue;
       t.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%) scale(${s.toFixed(2)})`;
       const w = (t.el.offsetWidth || 150) * s;
       const h = (t.el.offsetHeight || 36) * s;
@@ -225,6 +233,10 @@ export class Fx {
     // фразы: старшие ставим первыми, новые поднимаем над занятым местом
     for (const b of this.bubbles) {
       const p = this.toScreen(b.speaker.anchor());
+      if (off(p)) {
+        b.el.style.opacity = '0';
+        continue;
+      }
       const bw = b.el.offsetWidth || 120;
       const bh = b.el.offsetHeight || 40;
       let x = p.x - bw / 2;
@@ -259,9 +271,28 @@ export class Fx {
         m.style.display = 'none';
         return;
       }
-      m.style.display = '';
-      m.textContent = mk.mark;
       const p = this.toScreen(mk.pos);
+      m.style.display = off(p) ? 'none' : '';
+      m.textContent = mk.mark;
+      m.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
+    });
+
+    const badges = this.office.roomBadges();
+    while (this.badges.length < badges.length) {
+      const m = document.createElement('div');
+      this.root.appendChild(m);
+      this.badges.push(m);
+    }
+    this.badges.forEach((m, i) => {
+      const bd = badges[i];
+      const p = bd ? this.toScreen(bd.pos) : null;
+      if (!bd || !p || off(p)) {
+        m.style.display = 'none';
+        return;
+      }
+      m.style.display = '';
+      m.className = `room-badge ${bd.kind}`;
+      if (m.textContent !== bd.text) m.textContent = bd.text;
       m.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
     });
   }

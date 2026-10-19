@@ -21,16 +21,42 @@ export interface DeptDef {
   singles: SingleId[];
 }
 
-// Порядок = порядок открытия. Число предметов совпадает с симуляцией экономики (FURN в sim2.py).
+// Порядок = порядок открытия отделов (решение от 19.10): сисадмины → поддержка → аналитики → разработка → тестирование.
 export const DEPTS: DeptDef[] = [
+  { id: 'sysadmins', items: ['post', 'toolbox', 'chair', 'lamp'], singles: ['mug'] },
   { id: 'support', items: ['desk', 'chair', 'phone'], singles: ['flower', 'mug'] },
+  { id: 'analysts', items: ['desk', 'chair', 'phone', 'monitor'], singles: ['flower'] },
   { id: 'dev', items: ['desk', 'chair', 'monitor', 'keyboard'], singles: ['flower'] },
   { id: 'qa', items: ['desk', 'chair', 'monitor', 'keyboard', 'mouse'], singles: ['flower'] },
-  { id: 'analysts', items: ['desk', 'chair', 'phone', 'monitor'], singles: ['flower'] },
-  { id: 'sysadmins', items: ['post', 'toolbox', 'chair', 'lamp'], singles: ['mug'] },
 ];
 export const DEPT_COUNT = DEPTS.length;
 export const DESKS = 6;
+
+export function deptIndex(id: DeptId): number {
+  return DEPTS.findIndex((d) => d.id === id);
+}
+
+/** Комнаты, которые тоже открываются за деньги. */
+export type RoomId = 'director' | 'rest' | 'toilet';
+export const ROOM_IDS: RoomId[] = ['director', 'rest', 'toilet'];
+
+export type Step = { kind: 'dept'; d: number } | { kind: 'room'; id: RoomId };
+
+/** Порядок открытия всех комнат. Каждая следующая доступна, когда открыта предыдущая. */
+export const SEQUENCE: Step[] = [
+  { kind: 'dept', d: 0 },
+  { kind: 'dept', d: 1 },
+  { kind: 'room', id: 'director' },
+  { kind: 'room', id: 'rest' },
+  { kind: 'dept', d: 2 },
+  { kind: 'room', id: 'toilet' },
+  { kind: 'dept', d: 3 },
+  { kind: 'dept', d: 4 },
+];
+
+export function stepIndex(s: Step): number {
+  return SEQUENCE.findIndex((x) => (x.kind === 'dept' && s.kind === 'dept' ? x.d === s.d : x.kind === 'room' && s.kind === 'room' && x.id === s.id));
+}
 
 export type CompanyStyle = 'startup' | 'bank' | 'studio' | 'space';
 

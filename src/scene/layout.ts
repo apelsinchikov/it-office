@@ -1,25 +1,17 @@
-// Геометрия офиса: 3×3 комнаты, камера «прямо» — 3/4 спереди, наклон 47° (решение от 18.10.2026).
-// Координаты плана (a, b): комната (col, row) — квадрат 1×1 с центром (col·P, row·P); a — вправо, b — к камере.
-// Мир (экран): x = a · ROOM_W, y = b · ROOM_D. Высоты стен и мебели — в пикселях экрана.
-
-/** Наклон камеры: пол сжат по вертикали на sin, высоты — на cos. */
-export const TILT = (47 * Math.PI) / 180;
-export const FY = Math.sin(TILT);
-/** Во сколько раз высоты ниже, чем были в изометрии 30°. */
-export const HK = Math.cos(TILT) / Math.cos(Math.PI / 6);
+// Геометрия офиса: 3×3 комнаты вокруг холла, изометрия 2:1 (камера «с угла», решение от 19.10.2026).
+// Коридоры между кабинетами — 100, по краю этажа коридора нет: стена кабинета у края и есть стена этажа.
+// Изо-координаты (a, b): комната (col, row) — квадрат со стороной 1 с центром (col·P, row·P).
+// Мир: x = (a − b) · ROOM_W/2, y = (a + b) · ROOM_H/2.
 
 export const ROOM_W = 420;
-/** Глубина комнаты на экране. */
-export const ROOM_D = Math.round(ROOM_W * FY);
-/** Старое имя: высота комнаты на экране. */
-export const ROOM_H = ROOM_D;
-/** Коридор между кабинетами: 90 на ширину комнаты 340 (как на схеме). */
-export const GAP = Math.round((ROOM_W * 90) / 340);
-/** Высота стены кабинета на экране. */
-export const WALL_H = Math.round(34 * HK);
+export const ROOM_H = 210;
+export const GAP = 100;
 /** Высота стены этажа. */
-export const OUTER_WALL_H = Math.round(70 * HK);
-/** Шаг комнат в координатах плана: комната 1 + коридор. */
+export const OUTER_WALL_H = 70;
+/** Низкий бортик по ближним краям кабинета. */
+export const LEDGE_H = 9;
+export const WALL_H = 34;
+/** Шаг комнат в изо-координатах: комната 1 + коридор. */
 export const P = (ROOM_W + GAP) / ROOM_W;
 
 export type RoomKind = 'dept' | 'director' | 'hall' | 'rest' | 'toilet';
@@ -33,18 +25,18 @@ export interface RoomDef {
   row: number;
 }
 
-// Номера отделов идут в порядке открытия: поддержка → разработка → тестирование → аналитики → сисадмины.
-// Раскладка от 18.10: дальний ряд — туалет, отдых, директор; ближний — тестирование, разработка, поддержка.
+// Номера отделов — в порядке открытия: сисадмины → поддержка → аналитики → разработка → тестирование.
+// Раскладка (row 0 — дальний край): туалет · отдых · директор / сисадмины · холл · аналитики / тестирование · разработка · поддержка.
 export const ROOMS: RoomDef[] = [
   { id: 'toilet', kind: 'toilet', col: 0, row: 0 },
   { id: 'rest', kind: 'rest', col: 1, row: 0 },
   { id: 'director', kind: 'director', col: 2, row: 0 },
-  { id: 'sysadmins', kind: 'dept', dept: 4, col: 0, row: 1 },
+  { id: 'sysadmins', kind: 'dept', dept: 0, col: 0, row: 1 },
   { id: 'hall', kind: 'hall', col: 1, row: 1 },
-  { id: 'analysts', kind: 'dept', dept: 3, col: 2, row: 1 },
-  { id: 'qa', kind: 'dept', dept: 2, col: 0, row: 2 },
-  { id: 'dev', kind: 'dept', dept: 1, col: 1, row: 2 },
-  { id: 'support', kind: 'dept', dept: 0, col: 2, row: 2 },
+  { id: 'analysts', kind: 'dept', dept: 2, col: 2, row: 1 },
+  { id: 'qa', kind: 'dept', dept: 4, col: 0, row: 2 },
+  { id: 'dev', kind: 'dept', dept: 3, col: 1, row: 2 },
+  { id: 'support', kind: 'dept', dept: 1, col: 2, row: 2 },
 ];
 
 export function roomById(id: RoomDef['id']): RoomDef {
@@ -61,11 +53,13 @@ export interface Pt {
 }
 
 export function isoToWorld(a: number, b: number): Pt {
-  return { x: a * ROOM_W, y: b * ROOM_D };
+  return { x: ((a - b) * ROOM_W) / 2, y: ((a + b) * ROOM_H) / 2 };
 }
 
 export function worldToIso(x: number, y: number): { a: number; b: number } {
-  return { a: x / ROOM_W, b: y / ROOM_D };
+  const s = (2 * x) / ROOM_W; // a − b
+  const t = (2 * y) / ROOM_H; // a + b
+  return { a: (s + t) / 2, b: (t - s) / 2 };
 }
 
 /** Центр комнаты (col,row) в координатах мира. */
@@ -73,9 +67,9 @@ export function roomCenter(col: number, row: number): Pt {
   return isoToWorld(col * P, row * P);
 }
 
-/** Точка внутри комнаты относительно её центра: u — слева направо, v — от дальней стены к камере, оба 0…1. */
+/** Точка внутри ромба комнаты относительно её центра: u, v от 0 до 1 (0,0 — дальний угол). */
 export function roomPoint(u: number, v: number): Pt {
-  return { x: (u - 0.5) * ROOM_W, y: (v - 0.5) * ROOM_D };
+  return { x: ((u - v) * ROOM_W) / 2, y: ((u + v) * ROOM_H) / 2 - ROOM_H / 2 };
 }
 
 /** Точка комнаты в мире. */
@@ -85,29 +79,29 @@ export function roomWorld(def: RoomDef, u: number, v: number): Pt {
   return { x: c.x + o.x, y: c.y + o.y };
 }
 
-/** Прямоугольник комнаты в мире. */
-export function roomRect(def: RoomDef): { x0: number; y0: number; x1: number; y1: number } {
-  const c = roomCenter(def.col, def.row);
-  return { x0: c.x - ROOM_W / 2, y0: c.y - ROOM_D / 2, x1: c.x + ROOM_W / 2, y1: c.y + ROOM_D / 2 };
-}
-
-/** Места под 6 столов: 2 ряда по 3. Первый нанятый — в центре ближнего ряда. */
+/** Места под 6 столов: 2 ряда по 3; ближний ряд — первые три стола. */
+// Два ряда по три стола, ровно по горизонтали экрана: u+v = const, u−v = −0.45 / 0 / +0.45.
+// Первый нанятый — в центре переднего ряда.
 export const DESK_SLOTS: { u: number; v: number }[] = [
-  { u: 0.5, v: 0.86 },
-  { u: 0.2, v: 0.86 },
-  { u: 0.8, v: 0.86 },
-  { u: 0.5, v: 0.46 },
-  { u: 0.2, v: 0.46 },
-  { u: 0.8, v: 0.46 },
+  { u: 0.675, v: 0.675 },
+  { u: 0.45, v: 0.9 },
+  { u: 0.9, v: 0.45 },
+  { u: 0.375, v: 0.375 },
+  { u: 0.15, v: 0.6 },
+  { u: 0.6, v: 0.15 },
 ];
 
-/** Пол этажа: прямоугольник под комнатами (коридора по краю нет). */
-export function floorBounds(): { x0: number; y0: number; x1: number; y1: number; min: number; max: number } {
+/** Пол этажа: ромб ровно по внешним краям крайних комнат (коридора по краю нет). */
+export function floorBounds(): { cx: number; cy: number; hw: number; hh: number; min: number; max: number } {
   const min = -0.5;
   const max = 2 * P + 0.5;
-  const a = isoToWorld(min, min);
-  const b = isoToWorld(max, max);
-  return { x0: a.x, y0: a.y, x1: b.x, y1: b.y, min, max };
+  const c = isoToWorld(P, P);
+  return { cx: c.x, cy: c.y, hw: ((max - min) * ROOM_W) / 2, hh: ((max - min) * ROOM_H) / 2, min, max };
+}
+
+/** Комната упирается в стену этажа: left — по краю a = min (col 0), right — по краю b = min (row 0). */
+export function touchesOuter(def: RoomDef): { left: boolean; right: boolean } {
+  return { left: def.col === 0, right: def.row === 0 };
 }
 
 export function isInsideRoom(def: RoomDef, x: number, y: number, margin = 0): boolean {
@@ -117,9 +111,4 @@ export function isInsideRoom(def: RoomDef, x: number, y: number, margin = 0): bo
 
 export function roomAt(x: number, y: number): RoomDef | undefined {
   return ROOMS.find((r) => isInsideRoom(r, x, y));
-}
-
-/** Комната упирается в стену этажа: слева, справа, сзади. */
-export function touchesOuter(def: RoomDef): { left: boolean; right: boolean; back: boolean } {
-  return { left: def.col === 0, right: def.col === 2, back: def.row === 0 };
 }

@@ -11,14 +11,14 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { room: 'director', text: 'tut.1', desk: true },
-  { room: 'support', text: 'tut.2' },
-  { room: 'dev', text: 'tut.3' },
-  { room: 'qa', text: 'tut.4' },
-  { room: 'analysts', text: 'tut.5' },
-  { room: 'sysadmins', text: 'tut.6' },
-  { room: 'rest', text: 'tut.7' },
-  { room: 'support', text: 'tut.8' },
+  { room: 'sysadmins', text: 'tut.1' },
+  { room: 'sysadmins', text: 'tut.2' },
+  { room: 'support', text: 'tut.3' },
+  { room: 'director', text: 'tut.4' },
+  { room: 'rest', text: 'tut.5' },
+  { room: 'analysts', text: 'tut.6' },
+  { room: 'toilet', text: 'tut.7' },
+  { room: 'sysadmins', text: 'tut.8' },
 ];
 
 export class Tutorial {

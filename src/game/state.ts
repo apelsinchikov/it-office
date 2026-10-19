@@ -1,6 +1,7 @@
 // Состояние игры. Всё, что нужно сохранить, лежит здесь; Game только читает и меняет его.
 
 import { DEPTS, DEPT_COUNT, DESKS } from './config';
+import { newDirector, type DirectorState } from './director';
 
 export { DEPT_COUNT as DEPTS_N, DESKS } from './config';
 
@@ -48,10 +49,12 @@ export interface RunState {
   /** singles[отдел][место][украшение] — куплено ли. */
   singles: boolean[][][];
   rest: { coffee: number; fridge: number; games: number };
+  /** Открыты ли кабинет директора, зона отдыха и туалет. */
+  rooms: { director: boolean; rest: boolean; toilet: boolean };
 }
 
 export interface GameState {
-  v: 2;
+  v: 3;
   company: number;
   run: RunState;
   grants: number;
@@ -75,6 +78,7 @@ export interface GameState {
   settings: Settings;
   tutorialDone: boolean;
   createdAt: number;
+  director: DirectorState;
 }
 
 function grid<T>(fill: () => T): T[][] {
@@ -83,7 +87,7 @@ function grid<T>(fill: () => T): T[][] {
 
 export function newRun(startCoins = 0): RunState {
   const levels = grid(() => 0);
-  levels[0][0] = 1; // в начале: один стол и один сотрудник поддержки
+  levels[0][0] = 1; // в начале: один сисадмин
   return {
     coins: startCoins,
     earned: 0,
@@ -93,6 +97,7 @@ export function newRun(startCoins = 0): RunState {
     furn: DEPTS.map((def) => Array.from({ length: DESKS }, () => def.items.map(() => 0))),
     singles: DEPTS.map((def) => Array.from({ length: DESKS }, () => def.singles.map(() => false))),
     rest: { coffee: 0, fridge: 0, games: 0 },
+    rooms: { director: false, rest: false, toilet: false },
   };
 }
 
@@ -102,7 +107,7 @@ export function newStats(): Stats {
 
 export function newState(now = Date.now()): GameState {
   return {
-    v: 2,
+    v: 3,
     company: 1,
     run: newRun(),
     grants: 0,
@@ -123,8 +128,12 @@ export function newState(now = Date.now()): GameState {
     settings: { sound: true, lang: null },
     tutorialDone: false,
     createdAt: now,
+    director: newDirector(),
   };
 }
+
+/** До 19.10 отделы шли поддержка, разработка, тестирование, аналитики, сисадмины; новый номер по старому. */
+const OLD_TO_NEW = [1, 3, 4, 2, 0];
 
 const num = (x: unknown, d = 0): number => (typeof x === 'number' && Number.isFinite(x) ? x : d);
 
@@ -138,23 +147,20 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
   const base = newState(now);
 
   if (r.v === 1) {
-    // этап 1: только монеты и уровни
-    const levels = r.levels as number[][] | undefined;
-    if (Array.isArray(levels) && Array.isArray(levels[0])) {
-      base.run.levels[0] = base.run.levels[0].map((_, k) => Math.max(0, Math.floor(num(levels[0][k]))));
-      if (base.run.levels[0][0] < 1) base.run.levels[0][0] = 1;
-    }
+    // этап 1: только монеты; отделы с тех пор переставлены, поэтому начинаем офис заново
     base.run.coins = num(r.coins);
-    base.run.earned = num(r.lifetime);
-    base.totalEarned = base.run.earned;
+    base.totalEarned = num(r.lifetime);
     base.lastSeen = num(r.savedAt, now);
     return base;
   }
-  if (r.v !== 2) return null;
+  if (r.v !== 2 && r.v !== 3) return null;
 
   const s = r as unknown as Partial<GameState>;
-  const out: GameState = { ...base, ...s, v: 2 } as GameState;
-  const run = (s.run ?? {}) as Partial<RunState>;
+  const out: GameState = { ...base, ...s, v: 3 } as GameState;
+  // v2: другой порядок отделов и другая экономика — текущий офис начинается заново,
+  // а Гранты, улучшения, достижения, фразы и задания остаются.
+  const fromV2 = r.v === 2;
+  const run = (fromV2 ? {} : (s.run ?? {})) as Partial<RunState>;
   const br = base.run;
   out.run = {
     coins: num(run.coins),
@@ -171,6 +177,11 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
       fridge: Math.min(3, Math.max(0, Math.floor(num(run.rest?.fridge)))),
       games: Math.min(10, Math.max(0, Math.floor(num(run.rest?.games)))),
     },
+    rooms: {
+      director: Boolean(run.rooms?.director),
+      rest: Boolean(run.rooms?.rest),
+      toilet: Boolean(run.rooms?.toilet),
+    },
   };
   if (out.run.levels[0][0] < 1) out.run.levels[0][0] = 1;
   out.company = Math.max(1, Math.floor(num(s.company, 1)));
@@ -182,6 +193,24 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
   out.reorgs = Math.max(0, Math.floor(num(s.reorgs)));
   out.totalEarned = num(s.totalEarned);
   out.shop = typeof s.shop === 'object' && s.shop ? { ...s.shop } : {};
+  if (fromV2) {
+    // улучшения отделов за Гранты переезжают вместе с отделами
+    const shop: Record<string, number> = {};
+    for (const [k, v] of Object.entries(out.shop)) {
+      const m = /^(speed|income)(\d)$/.exec(k);
+      shop[m ? `${m[1]}${OLD_TO_NEW[Number(m[2])]}` : k] = v;
+    }
+    out.shop = shop;
+    out.directorDesk = 0;
+  }
+  const dir = (s.director ?? {}) as Partial<DirectorState>;
+  out.director = {
+    task: dir.task && typeof dir.task === 'object' ? dir.task : null,
+    nextOfferAt: num(dir.nextOfferAt),
+    inventory: typeof dir.inventory === 'object' && dir.inventory ? { ...dir.inventory } : {},
+    active: Array.isArray(dir.active) ? dir.active.filter((a) => a && typeof a.left === 'number') : [],
+    done: num(dir.done),
+  };
   out.stats = { ...base.stats, ...(s.stats ?? {}) };
   out.quests = { ...base.quests, ...(s.quests ?? {}) };
   out.achievements = Array.isArray(s.achievements) ? s.achievements.filter((x) => typeof x === 'string') : [];

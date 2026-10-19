@@ -2,8 +2,8 @@
 
 import { Container } from 'pixi.js';
 import type { PhraseGroup } from '../game/phrases';
-import { Character, dirFrom, randomLook, type Dir, type Outfit } from './characters';
-import { FY, P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
+import { Character, randomLook, type Dir, type Outfit } from './characters';
+import { P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
 
 const CELL = 1 / 12;
 export const CHAR_SCALE = 0.32;
@@ -61,17 +61,7 @@ export class NavGrid {
     return [i, j];
   }
 
-  /** Прямая между клетками свободна (идём, пока ничего не мешает). */
-  private lineFree(i0: number, j0: number, i1: number, j1: number): boolean {
-    const steps = Math.ceil(Math.hypot(i1 - i0, j1 - j0) * 2);
-    for (let q = 1; q < steps; q++) {
-      const t = q / steps;
-      if (!this.isOpen(Math.round(i0 + (i1 - i0) * t), Math.round(j0 + (j1 - j0) * t))) return false;
-    }
-    return true;
-  }
-
-  /** A* по 8 направлениям, потом срезаем углы — люди ходят наискосок, а не «по клеточкам». */
+  /** A* по 4 направлениям (вдоль изо-осей — так ходят в изометрии). */
   path(from: Pt, to: Pt): Pt[] {
     const [si, sj] = this.nearestOpen(...this.cellOf(from));
     const [ti, tj] = this.nearestOpen(...this.cellOf(to));
@@ -84,7 +74,7 @@ export class NavGrid {
     const inOpen = new Uint8Array(n * n);
     g[start] = 0;
     inOpen[start] = 1;
-    const h = (k: number): number => Math.hypot(Math.floor(k / n) - ti, (k % n) - tj);
+    const h = (k: number): number => Math.abs(Math.floor(k / n) - ti) + Math.abs((k % n) - tj);
     while (open.length) {
       let bi = 0;
       for (let q = 1; q < open.length; q++) if (g[open[q]] + h(open[q]) < g[open[bi]] + h(open[bi])) bi = q;
@@ -93,37 +83,40 @@ export class NavGrid {
       if (cur === goal) break;
       const ci = Math.floor(cur / n);
       const cj = cur % n;
-      for (let di = -1; di <= 1; di++)
-        for (let dj = -1; dj <= 1; dj++) {
-          if (!di && !dj) continue;
-          const ni = ci + di;
-          const nj = cj + dj;
-          if (!this.isOpen(ni, nj)) continue;
-          if (di && dj && (!this.isOpen(ci + di, cj) || !this.isOpen(ci, cj + dj))) continue;
-          const k = ni * n + nj;
-          const ng = g[cur] + (di && dj ? Math.SQRT2 : 1);
-          if (ng < g[k]) {
-            g[k] = ng;
-            came[k] = cur;
-            if (!inOpen[k]) {
-              open.push(k);
-              inOpen[k] = 1;
-            }
+      for (const [di, dj] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const ni = ci + di;
+        const nj = cj + dj;
+        if (!this.isOpen(ni, nj)) continue;
+        const k = ni * n + nj;
+        const ng = g[cur] + 1;
+        if (ng < g[k]) {
+          g[k] = ng;
+          came[k] = cur;
+          if (!inOpen[k]) {
+            open.push(k);
+            inOpen[k] = 1;
           }
         }
+      }
     }
     if (came[goal] < 0 && goal !== start) return [to];
     const cells: number[] = [];
-    for (let k = goal; k !== -1; k = came[k]) cells.push(k);
+    for (let k = goal; k !== -1 && k !== start; k = came[k]) cells.push(k);
     cells.reverse();
+    // оставляем только точки поворота
     const pts: Pt[] = [];
-    let i = 0;
-    while (i < cells.length - 1) {
-      let j = cells.length - 1;
-      const a = cells[i];
-      while (j > i + 1 && !this.lineFree(Math.floor(a / n), a % n, Math.floor(cells[j] / n), cells[j] % n)) j--;
-      if (j < cells.length - 1) pts.push(this.world(Math.floor(cells[j] / n), cells[j] % n));
-      i = j;
+    let prevDir = -1;
+    for (let q = 0; q < cells.length; q++) {
+      const k = cells[q];
+      const prev = q === 0 ? start : cells[q - 1];
+      const dir = k - prev;
+      if (dir !== prevDir && q > 0) pts.push(this.world(Math.floor(prev / n), prev % n));
+      prevDir = dir;
     }
     pts.push(to);
     return pts;
@@ -167,9 +160,7 @@ type WalkerKind = 'coffee' | 'gamer' | 'roamer';
 const PERSONAL = 26;
 /** Сколько секунд ждать, если обойти не получается; потом — идти в другое место. */
 const GIVE_UP = 1.2;
-// расстояние «по полу»: y на экране сжат наклоном камеры
-const floorDist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, (a.y - b.y) / FY);
-const near = (a: Pt, b: Pt, r: number): boolean => floorDist(a, b) < r;
+const near = (a: Pt, b: Pt, r: number): boolean => Math.hypot(a.x - b.x, (a.y - b.y) * 2) < r;
 
 const OUTFITS: Outfit[] = ['support', 'dev', 'qa', 'analyst', 'sysadmin'];
 
@@ -227,6 +218,19 @@ export class Walker {
       this.seated.root.position.set(this.pos.x, this.pos.y);
       this.seated.root.zIndex = this.pos.y + 1;
     }
+  }
+
+  /** Бросить текущую цель и встать на ближайшую свободную клетку. */
+  reset(): void {
+    this.release();
+    this.hidden = false;
+    this.char.root.visible = true;
+    this.path = [];
+    this.target = null;
+    const nav = this.world.nav;
+    if (!nav.freeAt(this.pos)) this.pos = nav.world(...nav.nearestOpen(...nav.cellOf(this.pos)));
+    this.wait = this.rng() * 2;
+    this.place();
   }
 
   private release(): void {
@@ -297,7 +301,7 @@ export class Walker {
         case 'sofa':
           this.wait = 60 + this.rng() * 60;
           if (!this.seated) {
-            this.seated = new Character(this.char.look, this.rng, true, true);
+            this.seated = new Character(this.char.look, this.rng, true);
             this.seated.root.scale.set(CHAR_SCALE);
             this.world.layer.addChild(this.seated.root);
           }
@@ -332,7 +336,7 @@ export class Walker {
   private crowded(p: Pt): boolean {
     for (const o of this.world.walkers) {
       if (o === this || o.hidden) continue;
-      if (near(o.pos, p, PERSONAL) && floorDist(o.pos, p) < floorDist(o.pos, this.pos)) return true;
+      if (near(o.pos, p, PERSONAL) && Math.hypot(o.pos.x - p.x, (o.pos.y - p.y) * 2) < Math.hypot(o.pos.x - this.pos.x, (o.pos.y - this.pos.y) * 2)) return true;
     }
     return false;
   }
@@ -358,7 +362,7 @@ export class Walker {
         const d = Math.hypot(dx, dy);
         const step = this.speed * dt;
         this.char.mode = 'walk';
-        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) this.char.setDir(dirFrom(dx, dy));
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) this.char.setDir(dx >= 0 ? (dy >= 0 ? 0 : 2) : dy >= 0 ? 1 : 3);
         const next = d <= step ? t : { x: this.pos.x + (dx / d) * step, y: this.pos.y + (dy / d) * step };
         if (this.crowded(next)) {
           // впереди человек: обходим справа, потом слева; не вышло — ждём, а потом идём в другое место
@@ -366,7 +370,7 @@ export class Walker {
           const uy = dy / (d || 1);
           let moved = false;
           for (const side of [1, -1]) {
-            const c = { x: this.pos.x + (ux * 0.3 - uy * side) * step, y: this.pos.y + (uy * 0.3 + ux * side) * step * FY };
+            const c = { x: this.pos.x + (ux * 0.3 - uy * side) * step, y: this.pos.y + (uy * 0.3 + ux * side) * step * 0.5 };
             if (this.world.nav.freeAt(c) && !this.crowded(c)) {
               this.pos = c;
               moved = true;
@@ -410,7 +414,7 @@ export class Walker {
 
 /** Всё, что нужно прохожим от офиса. */
 export class WalkerWorld {
-  readonly nav: NavGrid;
+  nav: NavGrid;
   readonly slots: Slot[] = [];
   readonly walkers: Walker[] = [];
   onToilet: (busy: boolean) => void = () => {};
@@ -421,6 +425,8 @@ export class WalkerWorld {
     readonly layer: Container,
     blocked: (a: number, b: number) => boolean,
     rng: () => number,
+    /** Открыта ли комната с таким местом (зона отдыха и туалет открываются за деньги). */
+    private slotOpen: (kind: Slot['kind']) => boolean = () => true,
   ) {
     this.nav = new NavGrid(blocked);
     const rest = roomById('rest');
@@ -428,14 +434,14 @@ export class WalkerWorld {
     const at = (def: RoomDef, u: number, v: number): Pt => roomWorld(def, u, v);
     // места: кофемашина 3, диван 2 + 1 зритель, холодильник 1, туалет 1
     this.slots.push(
-      { id: 'coffee1', pos: at(rest, 0.12, 0.4), dir: 2, kind: 'coffee', by: null },
-      { id: 'coffee2', pos: at(rest, 0.23, 0.42), dir: 2, kind: 'coffee', by: null },
-      { id: 'coffee3', pos: at(rest, 0.34, 0.4), dir: 2, kind: 'coffee', by: null },
-      { id: 'sofa1', pos: at(rest, 0.47, 0.55), dir: 2, kind: 'sofa', by: null },
-      { id: 'sofa2', pos: at(rest, 0.63, 0.55), dir: 2, kind: 'sofa', by: null },
-      { id: 'viewer', pos: at(rest, 0.82, 0.58), dir: 2, kind: 'viewer', by: null },
-      { id: 'fridge', pos: at(rest, 0.88, 0.42), dir: 2, kind: 'fridge', by: null },
-      { id: 'toilet', pos: at(toilet, 0.34, 0.44), dir: 2, kind: 'toilet', by: null },
+      { id: 'coffee1', pos: at(rest, 0.4, 0.2), dir: 3, kind: 'coffee', by: null },
+      { id: 'coffee2', pos: at(rest, 0.44, 0.32), dir: 3, kind: 'coffee', by: null },
+      { id: 'coffee3', pos: at(rest, 0.32, 0.4), dir: 2, kind: 'coffee', by: null },
+      { id: 'sofa1', pos: at(rest, 0.3, 0.7), dir: 0, kind: 'sofa', by: null },
+      { id: 'sofa2', pos: at(rest, 0.42, 0.62), dir: 0, kind: 'sofa', by: null },
+      { id: 'viewer', pos: at(rest, 0.2, 0.55), dir: 0, kind: 'viewer', by: null },
+      { id: 'fridge', pos: at(rest, 0.7, 0.32), dir: 2, kind: 'fridge', by: null },
+      { id: 'toilet', pos: at(toilet, 0.4, 0.5), dir: 2, kind: 'toilet', by: null },
     );
     const kinds: WalkerKind[] = ['coffee', 'coffee', 'coffee', 'gamer', 'gamer', 'roamer', 'roamer', 'roamer'];
     for (const k of kinds) {
@@ -446,8 +452,15 @@ export class WalkerWorld {
   }
 
   freeSlot(kinds: Slot['kind'][], rng: () => number): Slot | null {
-    const free = this.slots.filter((s) => kinds.includes(s.kind) && !s.by);
+    const free = this.slots.filter((s) => kinds.includes(s.kind) && !s.by && this.slotOpen(s.kind));
     return free.length ? free[Math.floor(rng() * free.length)] : null;
+  }
+
+  /** Комната открылась или закрылась: новая сетка, а кто оказался в закрытом — выходит в ближайший проход. */
+  rebuild(blocked: (a: number, b: number) => boolean, slotOpen?: (kind: Slot['kind']) => boolean): void {
+    if (slotOpen) this.slotOpen = slotOpen;
+    this.nav = new NavGrid(blocked);
+    for (const w of this.walkers) w.reset();
   }
 
   toilet(busy: boolean): void {

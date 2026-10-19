@@ -3,6 +3,7 @@ import './style.css';
 import { play, setSound, unlockAudio } from './audio';
 import { checkAchievements, ACHIEVEMENTS } from './game/achievements';
 import { companyDef } from './game/config';
+import { directorTick } from './game/director';
 import { eventIdAt, eventMod } from './game/events';
 import { Game } from './game/game';
 import { claimableCount, ensureDaily } from './game/quests';
@@ -95,7 +96,7 @@ async function start(): Promise<void> {
       if (g > 0) {
         play('reorg');
         hud.toast(t('toast.reorg', { n: g }), 'good');
-        focusRoom(roomById('support'));
+        focusRoom(roomById('sysadmins'));
         saveAll();
       }
     },
@@ -105,7 +106,7 @@ async function start(): Promise<void> {
         app.renderer.background.color = office.themeBg;
         hud.toast(t('toast.company', { name: t(`company.${companyDef(game.state.company).style}` as Key) }), 'good');
         hud.close();
-        focusRoom(roomById('support'));
+        focusRoom(roomById('sysadmins'));
         saveAll();
       }
     },
@@ -153,9 +154,9 @@ async function start(): Promise<void> {
     () => {
       game.state.tutorialDone = true;
       save();
-      const support = roomById('support');
-      hud.open({ kind: 'room', def: support });
-      focusRoom(support);
+      const first = roomById('sysadmins');
+      hud.open({ kind: 'room', def: first });
+      focusRoom(first);
     },
     (on) => {
       hud.setHidden(on);
@@ -197,7 +198,7 @@ async function start(): Promise<void> {
   };
 
   // старт: обучение или поддержка крупным планом
-  focusRoom(roomById('support'), true);
+  focusRoom(roomById('sysadmins'), true);
   if (!game.state.tutorialDone) tutorial.start();
   else offerOffline((Date.now() - game.state.lastSeen) / 1000);
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
@@ -238,6 +239,13 @@ async function start(): Promise<void> {
         play('achieve');
       }
     }
+    // задания директора IT
+    const dr = tutorial.active ? null : directorTick(game, Date.now());
+    if (dr === 'offered') hud.toast(t('task.offered'));
+    else if (dr === 'done') {
+      hud.toast(t('task.done'), 'good');
+      play('achieve');
+    } else if (dr === 'expired') hud.toast(t('task.expired'));
     const c = claimableCount(game);
     if (c > lastClaimable && !tutorial.active) hud.toast(t('toast.quest'));
     lastClaimable = c;

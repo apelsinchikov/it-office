@@ -15,10 +15,14 @@ interface Pt {
 const MAX_ZOOM = 1.8; // дальше приближать нельзя: спрайты начнут мылиться
 const TAP_SLOP = 10; // смещение пальца, после которого это уже не тап, а перетаскивание
 const FOCUS_SEC = 0.45;
+/** Сильнее всего отдалённая камера показывает по ширине столько пикселей мира (≈ полтора кабинета). */
+const FAR_VIEW_W = 860;
 
 /**
  * Камера: перетаскивание одним пальцем, щипок двумя, колесо мыши.
  * Двигает и масштабирует контейнер офиса. Тап по сцене отдаёт в onTap экранные координаты.
+ * bounds — весь нарисованный мир (офис и поле вокруг): экран всегда целиком заполнен картой,
+ * отдалить дальше «полутора кабинетов» и увести камеру за край мира нельзя.
  */
 export class Camera {
   onTap: (x: number, y: number) => void = () => {};
@@ -47,30 +51,30 @@ export class Camera {
     this.fit();
   }
 
-  /** Показать весь этаж целиком. */
-  fit(): void {
+  /** Пределы зума для текущего размера экрана. */
+  private limits(): void {
     const s = this.screen();
-    const ins = this.insets();
-    const avail = { w: s.width - 24, h: s.height - ins.top - ins.bottom - 24 };
-    const fitScale = Math.min(avail.w / this.bounds.width, avail.h / this.bounds.height);
-    this.minScale = fitScale;
-    this.maxScale = Math.max(MAX_ZOOM, fitScale);
-    this.target.scale.set(fitScale);
+    const cover = Math.max(s.width / this.bounds.width, s.height / this.bounds.height);
+    this.minScale = Math.max(cover, s.width / FAR_VIEW_W);
+    this.maxScale = Math.max(MAX_ZOOM, this.minScale);
+  }
+
+  /** Самый дальний вид на центр мира. */
+  fit(): void {
+    this.limits();
+    const s = this.screen();
+    const k = this.minScale;
+    this.target.scale.set(k);
     const cx = this.bounds.x + this.bounds.width / 2;
     const cy = this.bounds.y + this.bounds.height / 2;
-    this.target.position.set(s.width / 2 - cx * fitScale, ins.top + 12 + avail.h / 2 - cy * fitScale);
+    this.target.position.set(s.width / 2 - cx * k, s.height / 2 - cy * k);
     this.clamp();
   }
 
   /** После поворота экрана / смены размера: пересчитать пределы зума, не сбивая вид. */
   onResize(): void {
-    const s = this.screen();
-    const ins = this.insets();
-    const fitScale = Math.min((s.width - 24) / this.bounds.width, (s.height - ins.top - ins.bottom - 24) / this.bounds.height);
-    this.minScale = fitScale;
-    this.maxScale = Math.max(MAX_ZOOM, fitScale);
-    const k = this.clampScale(this.target.scale.x);
-    this.target.scale.set(k);
+    this.limits();
+    this.target.scale.set(this.clampScale(this.target.scale.x));
     this.clamp();
   }
 
@@ -91,7 +95,7 @@ export class Camera {
       t: 0,
       from: { x: this.target.x, y: this.target.y },
       fromScale: this.target.scale.x,
-      to: { x: s.width / 2 - world.x * toScale, y: visibleMidY - world.y * toScale },
+      to: this.clampPos(s.width / 2 - world.x * toScale, visibleMidY - world.y * toScale, toScale),
       toScale,
     };
     if (instant) this.update(FOCUS_SEC);
@@ -114,23 +118,23 @@ export class Camera {
     return Math.min(this.maxScale, Math.max(this.minScale, s));
   }
 
-  /** Центр экрана всегда остаётся над офисом — улететь в пустоту нельзя. */
-  private clamp(): void {
+  /** Экран целиком внутри мира: за краем поля пустоты не видно. */
+  private clampPos(x: number, y: number, k: number): Pt {
     const s = this.screen();
-    const k = this.target.scale.x;
     const b = this.bounds;
-    const minX = s.width / 2 - (b.x + b.width) * k;
-    const maxX = s.width / 2 - b.x * k;
-    const minY = s.height / 2 - (b.y + b.height) * k;
-    const maxY = s.height / 2 - b.y * k;
-    this.target.x = Math.min(maxX, Math.max(minX, this.target.x));
-    this.target.y = Math.min(maxY, Math.max(minY, this.target.y));
-    // офис целиком влезает по ширине — держим его по центру, а не у края
-    if (b.width * k <= s.width) this.target.x = s.width / 2 - (b.x + b.width / 2) * k;
-    if (b.height * k <= s.height - this.insets().top - this.insets().bottom) {
-      const ins = this.insets();
-      this.target.y = ins.top + (s.height - ins.top - ins.bottom) / 2 - (b.y + b.height / 2) * k;
-    }
+    const minX = s.width - (b.x + b.width) * k;
+    const maxX = -b.x * k;
+    const minY = s.height - (b.y + b.height) * k;
+    const maxY = -b.y * k;
+    return {
+      x: minX > maxX ? (minX + maxX) / 2 : Math.min(maxX, Math.max(minX, x)),
+      y: minY > maxY ? (minY + maxY) / 2 : Math.min(maxY, Math.max(minY, y)),
+    };
+  }
+
+  private clamp(): void {
+    const p = this.clampPos(this.target.x, this.target.y, this.target.scale.x);
+    this.target.position.set(p.x, p.y);
   }
 
   private toWorld(p: Pt): Pt {
