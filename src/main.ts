@@ -230,11 +230,18 @@ async function start(): Promise<void> {
 
   // Видеокарта может отобрать контекст WebGL, пока игра долго в фоне: экран становится чёрным.
   // Сохраняемся и перезапускаемся, когда контекст можно вернуть.
+  // Debounce: не перезагружаться чаще раза в 30 секунд (защита от циклической потери контекста на десктопе).
+  let contextRestoreTimer = 0;
   app.canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
     saveAll();
   });
-  app.canvas.addEventListener('webglcontextrestored', () => location.reload());
+  app.canvas.addEventListener('webglcontextrestored', () => {
+    const now = Date.now();
+    if (now - contextRestoreTimer < 30000) return; // debounce: не чаще раза в 30с
+    contextRestoreTimer = now;
+    location.reload();
+  });
 
   // ?debug — доступ к игре из консоли для проверки
   if (location.search.includes('debug'))

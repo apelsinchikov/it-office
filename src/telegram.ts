@@ -90,9 +90,20 @@ export function initTelegram(): TelegramInfo {
   // Извлечём telegram_id: сначала из initDataUnsafe, потом из initData (парсинг id=...)
   let user = tg.initDataUnsafe.user;
   if (!user && initData) {
-    const m = initData.match(/id=(\d+)/);
-    if (m) {
-      user = { id: parseInt(m[1], 10), first_name: '' };
+    try {
+      const params = new URLSearchParams(initData);
+      const id = parseInt(params.get('id') || '0', 10);
+      if (id > 0) {
+        user = {
+          id,
+          first_name: params.get('first_name') || '',
+          last_name: params.get('last_name') || undefined,
+          username: params.get('username') || undefined,
+          language_code: params.get('language_code') || undefined,
+        };
+      }
+    } catch {
+      // ignore
     }
   }
 
