@@ -216,7 +216,13 @@ async function start(): Promise<void> {
   // Холст всегда по размеру экрана. В Telegram (сворачивание Mini App, долгое время в фоне, смена полного экрана)
   // событие resize у window иногда приходит в середине анимации или не приходит вовсе — тогда холст оставался
   // на полэкрана с чёрной полосой снизу. Сверяем размер сами: ResizeObserver, возврат в игру и раз в полсекунды.
+  // Debounce: Telegram SDK шлёт пачки событий (fullscreenChanged, safeAreaChanged, viewportChanged) —
+  // без debounce canvas перерисовывается 3 раза подряд, что вызывает "серое моргание".
+  let syncSizeTimer = 0;
   function syncSize(): void {
+    const now = Date.now();
+    if (now - syncSizeTimer < 500) return; // debounce: не чаще раза в 500мс
+    syncSizeTimer = now;
     const w = gameEl.clientWidth || window.innerWidth;
     const h = gameEl.clientHeight || window.innerHeight;
     if (w > 0 && h > 0 && (Math.abs(app.screen.width - w) > 0.5 || Math.abs(app.screen.height - h) > 0.5)) {
