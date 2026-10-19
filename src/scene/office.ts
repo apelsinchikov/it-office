@@ -156,7 +156,7 @@ class DeskView {
       // лампа справа на столе (нарисована в координатах поста 120×110, ×1,9)
       const l = lamp(Math.max(0, this.tier('lamp')));
       l.scale.set(1.9);
-      l.position.set(154, -2);
+      l.position.set(140, -11);
       this.scene.addChild(l);
       this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     }
