@@ -338,7 +338,7 @@ body.avral #game::after {
   right: 8px;
   bottom: calc(var(--safe-bottom) + 8px);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
   padding: 6px;
   border: var(--line);
@@ -374,7 +374,10 @@ body.avral #game::after {
 }
 
 .nav-label {
-  font-size: 10.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9.5px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1192,14 +1195,14 @@ body.avral #game::after {
   .nav {
     left: 50%;
     right: auto;
-    width: 440px;
+    width: 480px;
     transform: translateX(-50%);
   }
 
   .tutorial {
     left: 50%;
     right: auto;
-    width: 440px;
+    width: 480px;
     transform: translateX(-50%);
   }
 
@@ -1464,4 +1467,65 @@ body.avral #game::after {
   padding: 8px;
   font: inherit;
   font-size: 14px;
+}
+
+/* рейтинг */
+.rating-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: var(--line);
+  border-radius: 14px;
+  background: var(--cream);
+}
+
+.rating-row.me {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+.rating-row.me .note {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.rating-place {
+  min-width: 28px;
+  font-weight: 900;
+  font-size: 16px;
+  text-align: center;
+}
+
+.rating-who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rating-name {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rating-sum {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rating-gap {
+  text-align: center;
+  opacity: 0.6;
 }

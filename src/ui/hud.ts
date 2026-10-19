@@ -14,6 +14,7 @@ import {
   directorPanel,
   grantsPanel,
   notePanel,
+  ratingPanel,
   questsPanel,
   restPanel,
   settingsPanel,
@@ -27,6 +28,7 @@ export type Sheet =
   | { kind: 'grants' }
   | { kind: 'quests' }
   | { kind: 'collection' }
+  | { kind: 'rating' }
   | { kind: 'settings' };
 
 export interface HudHandlers {
@@ -133,6 +135,7 @@ export class Hud {
       ['quests', 'nav.quests', ICONS.quests],
       ['grants', 'nav.grants', ICONS.grants],
       ['collection', 'nav.collection', ICONS.collection],
+      ['rating', 'nav.rating', ICONS.rating],
       ['settings', 'nav.settings', ICONS.settings],
     ];
     for (const [id, key, icon] of items) {
@@ -141,7 +144,7 @@ export class Hud {
       b.addEventListener('click', () => {
         hd.sfx('click');
         if (id === 'office') this.close();
-        else this.toggle({ kind: id as 'grants' | 'quests' | 'collection' | 'settings' });
+        else this.toggle({ kind: id as 'grants' | 'quests' | 'collection' | 'rating' | 'settings' });
       });
       this.navBtns.set(id, b);
       this.nav.append(b);
@@ -217,6 +220,8 @@ export class Hud {
         return questsPanel(ctx);
       case 'collection':
         return collectionPanel(ctx, this.colTab);
+      case 'rating':
+        return ratingPanel(ctx);
       case 'settings':
         return settingsPanel(ctx);
     }

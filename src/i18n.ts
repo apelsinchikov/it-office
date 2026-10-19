@@ -154,6 +154,16 @@ const D = {
   'nav.grants': ['Гранты', 'Grants'],
   'nav.collection': ['Коллекция', 'Collection'],
   'nav.settings': ['Настройки', 'Settings'],
+  'nav.rating': ['Рейтинг', 'Rating'],
+  // рейтинг
+  'rating.loading': ['Загружаем рейтинг…', 'Loading the rating…'],
+  'rating.error': ['Не удалось загрузить рейтинг. Проверьте интернет и откройте вкладку ещё раз.', 'Could not load the rating. Check your connection and open the tab again.'],
+  'rating.noTg': ['Рейтинг доступен, когда игра открыта в Telegram.', 'The rating is available when the game is opened in Telegram.'],
+  'rating.empty': ['Пока в рейтинге никого нет.', 'Nobody is in the rating yet.'],
+  'rating.note': ['Сначала — у кого номер компании больше, затем — кто больше заработал за всю игру.', 'Higher company number first, then more money earned over the whole game.'],
+  'rating.company': ['Компания №{n}', 'Company #{n}'],
+  'rating.you': ['Вы', 'You'],
+  'rating.noName': ['Без имени', 'No name'],
   // гранты
   'grants.title': ['Реорганизация и Гранты', 'Reorganization & Grants'],
   'grants.wallet': ['Гранты', 'Grants'],

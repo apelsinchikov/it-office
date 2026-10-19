@@ -9,8 +9,9 @@ import { eventIdAt, eventMod } from './game/events';
 import { Game } from './game/game';
 import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
+import { loadRemote, saveRemote, setRemoteAuth } from './game/remote';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
-import { newState } from './game/state';
+import { newState, type GameState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import * as charactersM from './scene/characters';
@@ -31,6 +32,7 @@ const OFFLINE_MIN_SEC = 60;
 
 async function start(): Promise<void> {
   const tg = initTelegram();
+  setRemoteAuth(tg.initData);
   let state = loadLocal();
   // сброс конкретного игрока по списку public/resets.json (один раз: новое сохранение моложе отметки)
   const resetAt = await fetchResetBefore(tg.user, `${import.meta.env.BASE_URL}resets.json`);
@@ -74,6 +76,7 @@ async function start(): Promise<void> {
   const saveAll = (): void => {
     save();
     void saveCloud(game.state);
+    void saveRemote(game.state, false, true);
   };
 
   // eslint-disable-next-line prefer-const
@@ -105,7 +108,8 @@ async function start(): Promise<void> {
     onReset: () => {
       clearLocal();
       clearCloud();
-      setTimeout(() => location.reload(), 300);
+      // на сервере тоже начинаем заново, иначе при входе вернулось бы старое сохранение
+      void saveRemote(newState(), true).finally(() => setTimeout(() => location.reload(), 300));
     },
     onTutorial: () => tutorial.start(),
     onReorg: () => {
@@ -261,18 +265,24 @@ async function start(): Promise<void> {
   else offerOffline((Date.now() - game.state.lastSeen) / 1000);
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
 
-  // сохранение в Telegram: если там прогресс дальше — берём его
-  void loadCloud().then((cloud) => {
-    // облачное сохранение старше отметки сброса — устарело, перезаписываем его новым
-    if (cloud && resetAt > 0 && cloud.createdAt < resetAt) {
-      void saveCloud(game.state);
+  // при входе сверяем три копии: на устройстве, в Telegram CloudStorage и в Supabase — берём самую продвинутую
+  void Promise.all([loadCloud(), loadRemote()]).then(async ([cloud, remote]) => {
+    // копии старше отметки сброса устарели и не возвращаются
+    const fresh = (c: GameState | null): GameState | null => (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
+    const cloudOk = fresh(cloud);
+    const remoteOk = fresh(remote.state);
+    const remoteStale = !!remote.state && !remoteOk;
+    const best = better(better(game.state, cloudOk), remoteOk);
+    if (best !== game.state) {
+      // прогресс дальше в другой копии: записываем его везде и перезапускаемся с ним
+      saveLocal(best);
+      await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
+      location.reload();
       return;
     }
-    if (wasReset) void saveCloud(game.state);
-    if (cloud && better(game.state, cloud) === cloud) {
-      saveLocal(cloud);
-      location.reload();
-    }
+    if (wasReset || (cloud && !cloudOk)) void saveCloud(game.state);
+    // первый вход после появления Supabase: текущий прогресс уходит на сервер
+    if (!remote.failed) void saveRemote(game.state, wasReset || remoteStale);
   });
 
   // свёрнута игра — не тикаем, при возврате считаем офлайн
@@ -290,7 +300,10 @@ async function start(): Promise<void> {
   });
   window.addEventListener('pagehide', saveAll);
   window.setInterval(save, SAVE_LOCAL_MS);
-  window.setInterval(() => void saveCloud(game.state), SAVE_CLOUD_MS);
+  window.setInterval(() => {
+    void saveCloud(game.state);
+    void saveRemote(game.state);
+  }, SAVE_CLOUD_MS);
 
   // раз в секунду: достижения, задания, события
   let lastClaimable = claimableCount(game);

@@ -6,6 +6,7 @@ import { COMPANY_STYLES, DEPTS, DESKS, SEQUENCE, SHOP, companyDef, stepIndex, ty
 import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, perkCashSec, perkDuration, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
 import { DIR_ITEMS, DIR_SINGLES, DIR_SINGLE_BONUS, DIR_TIER_BONUS, FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
 import { formatNumber } from '../game/format';
+import { loadLeaderboard, remoteAvailable, type RatingRow } from '../game/remote';
 import type { Game } from '../game/game';
 import { PHRASES, PHRASE_GROUPS, TOTAL_PHRASES, phraseId, type PhraseGroup } from '../game/phrases';
 import { CHAIN, DAILY, LONG, chainCurrent, chainReward, claimChain, claimDaily, claimLong, dailyProgress, dailyReward, longReady } from '../game/quests';
@@ -749,6 +750,44 @@ export function collectionPanel(ctx: Ctx, tab: { v: 'ach' | 'phr' }): Panel {
     }
   }
   return { title: t('nav.collection'), body, refresh() {} };
+}
+
+// ---------- рейтинг ----------
+
+function ratingRow(r: RatingRow): HTMLElement {
+  return h(
+    'div',
+    { class: 'rating-row' + (r.me ? ' me' : '') },
+    h('span', { class: 'rating-place', text: String(r.place) }),
+    h(
+      'span',
+      { class: 'rating-who' },
+      h('span', { class: 'rating-name', text: (r.name || t('rating.noName')) + (r.me ? ` · ${t('rating.you')}` : '') }),
+      h('span', { class: 'note small', text: t('rating.company', { n: r.company }) }),
+    ),
+    h('span', { class: 'rating-sum' }, h('span', { class: 'coin-icon', text: 'tc' }), h('span', { text: fmt(r.lifetime) })),
+  );
+}
+
+export function ratingPanel(ctx: Ctx): Panel {
+  void ctx;
+  const body = h('div', { class: 'panel-body' });
+  const list = h('div', { class: 'rating-list' });
+  body.append(h('p', { class: 'note small', text: t('rating.note') }), list);
+  if (!remoteAvailable()) list.append(h('p', { class: 'note', text: t('rating.noTg') }));
+  else {
+    list.append(h('p', { class: 'note', text: t('rating.loading') }));
+    loadLeaderboard(100)
+      .then(({ top, me }) => {
+        list.replaceChildren();
+        if (!top.length) list.append(h('p', { class: 'note', text: t('rating.empty') }));
+        for (const r of top) list.append(ratingRow(r));
+        // игрок не в первой сотне — его строка отдельно внизу
+        if (me && !top.some((r) => r.me)) list.append(h('div', { class: 'rating-gap', text: '…' }), ratingRow(me));
+      })
+      .catch(() => list.replaceChildren(h('p', { class: 'note', text: t('rating.error') })));
+  }
+  return { title: t('nav.rating'), body, refresh() {} };
 }
 
 // ---------- настройки ----------
