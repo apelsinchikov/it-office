@@ -52,15 +52,17 @@ async function start(): Promise<void> {
   let eventId = applyEvent();
   ensureDaily(game, Date.now());
 
+  const gameEl = document.getElementById('game') ?? document.body;
   const app = new Application();
   await app.init({
-    resizeTo: window,
+    // размер берём у контейнера #game (он на весь экран), а не у window: так его отслеживает ResizeObserver ниже
+    resizeTo: gameEl,
     background: '#262338',
     antialias: true,
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
-  document.getElementById('game')?.appendChild(app.canvas);
+  gameEl.appendChild(app.canvas);
 
   const office = new OfficeView(game, rng);
   office.setEvent(eventId);
@@ -194,7 +196,30 @@ async function start(): Promise<void> {
   window.addEventListener('pointerdown', unlockAudio, { capture: true });
   app.renderer.on('resize', () => camera.onResize());
   // кнопки Telegram сверху появляются чуть позже запуска — подвинуть камеру под новые отступы
-  onTelegramLayout(() => requestAnimationFrame(() => camera.onResize()));
+  onTelegramLayout(() => requestAnimationFrame(() => syncSize()));
+
+  // Холст всегда по размеру экрана. В Telegram (сворачивание Mini App, долгое время в фоне, смена полного экрана)
+  // событие resize у window иногда приходит в середине анимации или не приходит вовсе — тогда холст оставался
+  // на полэкрана с чёрной полосой снизу. Сверяем размер сами: ResizeObserver, возврат в игру и раз в полсекунды.
+  function syncSize(): void {
+    const w = gameEl.clientWidth || window.innerWidth;
+    const h = gameEl.clientHeight || window.innerHeight;
+    if (w > 0 && h > 0 && (Math.abs(app.screen.width - w) > 0.5 || Math.abs(app.screen.height - h) > 0.5)) {
+      app.renderer.resize(w, h);
+      camera.onResize();
+    }
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(() => syncSize()).observe(gameEl);
+  window.setInterval(syncSize, 500);
+  for (const ev of ['pageshow', 'focus', 'orientationchange']) window.addEventListener(ev, () => requestAnimationFrame(syncSize));
+
+  // Видеокарта может отобрать контекст WebGL, пока игра долго в фоне: экран становится чёрным.
+  // Сохраняемся и перезапускаемся, когда контекст можно вернуть.
+  app.canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    saveAll();
+  });
+  app.canvas.addEventListener('webglcontextrestored', () => location.reload());
 
   // ?debug — доступ к игре из консоли для проверки
   if (location.search.includes('debug'))
@@ -242,6 +267,7 @@ async function start(): Promise<void> {
   // свёрнута игра — не тикаем, при возврате считаем офлайн
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestAnimationFrame(syncSize);
     if (document.visibilityState === 'hidden') {
       hiddenAt = Date.now();
       saveAll();
