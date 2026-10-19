@@ -1,3 +1,4 @@
+import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './style.css';
 import { play, setSound, unlockAudio } from './audio';
@@ -12,6 +13,9 @@ import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, s
 import { newState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
+import * as charactersM from './scene/characters';
+import * as drawM from './scene/draw';
+import * as furnitureM from './scene/furniture';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
 import { initTelegram, onTelegramLayout } from './telegram';
@@ -193,7 +197,15 @@ async function start(): Promise<void> {
   onTelegramLayout(() => requestAnimationFrame(() => camera.onResize()));
 
   // ?debug — доступ к игре из консоли для проверки
-  if (location.search.includes('debug')) Object.assign(window, { __game: game, __hud: hud, __office: office, __focus: focusRoom });
+  if (location.search.includes('debug'))
+    Object.assign(window, {
+      __game: game,
+      __hud: hud,
+      __office: office,
+      __focus: focusRoom,
+      // для отладки рисовки прямо в браузере: классы Pixi и модули рисования сцены
+      __lab: { PIXI, app, draw: drawM, furniture: furnitureM, characters: charactersM, camera },
+    });
 
   // офлайн-доход
   const offerOffline = (sec: number): void => {
