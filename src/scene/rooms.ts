@@ -82,7 +82,7 @@ const item = (z: number): { c: Container; g: Graphics } => {
 export const LOUNGE_BLOCKS: Block[] = [
   [0.0, 0.27, 0.0, 0.2], // стойка с кофемашиной
   [0.26, 0.44, 0.0, 0.2], // холодильник
-  [0.44, 0.92, 0.0, 0.26], // диван
+  [0.47, 0.92, 0.0, 0.26], // диван
   [0.48, 0.88, 0.58, 0.74], // тумба с телевизором
   [0.02, 0.16, 0.8, 0.94], // растение
 ];
@@ -95,8 +95,8 @@ export const LOUNGE_SPOTS = {
     [0.17, 0.45, 1],
   ],
   sofa: [
-    [0.6, 0.15, 1],
-    [0.77, 0.15, 1],
+    [0.62, 0.15, 1],
+    [0.78, 0.15, 1],
   ],
   viewer: [0.4, 0.5, 0],
   fridge: [0.35, 0.28, 2],
@@ -203,19 +203,28 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     items.push(c);
   }
 
-  // диван у стены этажа: одна вещь — спинка, сиденье, два подлокотника; сидящие рисуются поверх него
+  // диван у стены этажа: цельный — общее основание, спинка во всю длину, подлокотники и подушки сиденья;
+  // контуры только снаружи, поэтому он читается одним предметом. Сидящие рисуются поверх него.
   {
     const dark = shade(sofaColor, -0.22);
     const side = shade(sofaColor, -0.34);
-    const { c, g } = item(P.z(0.44, 0.04));
-    const u0 = 0.46;
+    const { c, g } = item(P.z(0.48, 0.04));
+    const u0 = 0.5;
     const u1 = 0.9;
-    P.shadow(g, u0, u1, 0.0, 0.25);
-    P.box(g, u0, u1, 0.0, 0.07, 0, 42, shade(sofaColor, 0.12), dark, side);
-    P.box(g, u0 + 0.04, u1 - 0.04, 0.07, 0.24, 0, 16, sofaColor, dark, side);
-    line(g, [...P.P((u0 + u1) / 2, 0.07, 16), ...P.P((u0 + u1) / 2, 0.24, 16)], dark, 2);
-    P.box(g, u0, u0 + 0.04, 0.03, 0.25, 0, 26, shade(sofaColor, 0.08), dark, side);
-    P.box(g, u1 - 0.04, u1, 0.03, 0.25, 0, 26, shade(sofaColor, 0.08), dark, side);
+    const v1 = 0.24;
+    P.shadow(g, u0, u1, 0.0, v1);
+    // основание на ножках-полозьях
+    P.box(g, u0, u1, 0.0, v1, 0, 12, dark, side, shade(side, -0.1));
+    // спинка
+    P.box(g, u0, u1, 0.0, 0.07, 12, 42, shade(sofaColor, 0.1), dark, side);
+    // подлокотник дальний (у меньшего u)
+    P.box(g, u0, u0 + 0.045, 0.0, v1, 12, 28, shade(sofaColor, 0.06), dark, side);
+    // две подушки сиденья — без зазора, общий цвет
+    const mid = (u0 + u1) / 2;
+    P.box(g, u0 + 0.045, mid, 0.07, v1, 12, 19, sofaColor, dark, side, 2);
+    P.box(g, mid, u1 - 0.045, 0.07, v1, 12, 19, sofaColor, dark, side, 2);
+    // подлокотник ближний
+    P.box(g, u1 - 0.045, u1, 0.0, v1, 12, 28, shade(sofaColor, 0.06), dark, side);
     items.push(c);
   }
 

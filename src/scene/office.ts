@@ -669,7 +669,8 @@ export class OfficeView {
     label.anchor.set(0.5);
     // ось текста — вдоль ряда (вверх-вправо по экрану), «вниз» текста — к камере: буквы лежат в плоскости пола
     label.setFromMatrix(new Matrix(0.894, -0.447, 0.894, 0.447, 0, 0));
-    const lp = roomPoint(0.9, 0.5);
+    // в зоне отдыха надпись ниже по полу — чтобы диван у стены её не закрывал
+    const lp = def.kind === 'rest' ? roomPoint(0.92, 0.62) : roomPoint(0.9, 0.5);
     label.position.set(ctr.x + lp.x, ctr.y + lp.y);
     label.alpha = 0.92;
     // слой надписей на полу: выше ковров и проводов, ниже мебели и людей
@@ -902,24 +903,25 @@ export class OfficeView {
       this.dirDecor.push(rug);
     }
     if (g.run.dir.picture) {
-      // картина на высокой стене этажа за директором, ровно между двумя окнами (там же, где окна: 16…56 по высоте)
+      // картина на стене кабинета со стороны зоны отдыха (u = 0), посередине; все линии — в плоскости стены
       const pic = new Graphics();
-      const f = floorBounds();
-      const top = { x: f.cx, y: f.cy - f.hh };
-      const right = { x: f.cx + f.hw, y: f.cy };
-      const at = (t: number, h: number): [number, number] => [top.x + (right.x - top.x) * t, top.y + (right.y - top.y) * t - h];
-      const t0 = 0.808;
-      const t1 = 0.859;
-      const frame = [...at(t0, 20), ...at(t1, 20), ...at(t1, 54), ...at(t0, 54)];
-      poly(pic, frame, { fill: 0xc9a46a, line: 2.5 });
-      const i0 = t0 + 0.004;
-      const i1 = t1 - 0.004;
-      poly(pic, [...at(i0, 24), ...at(i1, 24), ...at(i1, 50), ...at(i0, 50)], { fill: 0x8ee3ff, line: 0 });
-      // холмы и солнце — ровно в плоскости стены
-      poly(pic, [...at(i0, 24), ...at(i1, 24), ...at(i1, 33), ...at((i0 + i1) / 2, 38), ...at(i0, 32)], { fill: 0x3ccf63, line: 0 });
-      const sun = at(i0 + (i1 - i0) * 0.72, 44);
-      circle(pic, sun[0], sun[1], 3, { fill: 0xffd23f, line: 0 });
-      pic.zIndex = -9.5e5;
+      const at = (v: number, h: number): [number, number] => {
+        const w = roomWorld(def, 0, v);
+        return [w.x, w.y - h];
+      };
+      const v0 = 0.38;
+      const v1 = 0.62;
+      const lo = 9;
+      const hi = WALL_H - 4;
+      poly(pic, [...at(v0, lo), ...at(v1, lo), ...at(v1, hi), ...at(v0, hi)], { fill: 0xc9a46a, line: 2.5 });
+      const i0 = v0 + 0.02;
+      const i1 = v1 - 0.02;
+      poly(pic, [...at(i0, lo + 3), ...at(i1, lo + 3), ...at(i1, hi - 3), ...at(i0, hi - 3)], { fill: 0x8ee3ff, line: 0 });
+      poly(pic, [...at(i0, lo + 3), ...at(i1, lo + 3), ...at(i1, lo + 9), ...at((i0 + i1) / 2, lo + 13), ...at(i0, lo + 8)], { fill: 0x3ccf63, line: 0 });
+      const sun = at(i0 + (i1 - i0) * 0.3, hi - 7);
+      circle(pic, sun[0], sun[1], 2.5, { fill: 0xffd23f, line: 0 });
+      // поверх своей стены (у неё zIndex по низу)
+      pic.zIndex = Math.max(at(v0, 0)[1], at(v1, 0)[1]) + 1;
       this.world.addChild(pic);
       this.dirDecor.push(pic);
     }
