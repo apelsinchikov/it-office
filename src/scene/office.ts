@@ -1,23 +1,21 @@
 // Сцена офиса: комнаты, рабочие места, руководители, директор, зона отдыха, туалет, прохожие.
 
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Matrix, Text } from 'pixi.js';
 import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, companyDef } from '../game/config';
 import { formatNumber } from '../game/format';
 import type { Game, GameEvent } from '../game/game';
 import { DEPT_GROUP, LEAD_GROUP, type PhraseGroup } from '../game/phrases';
-import { t, type Key } from '../i18n';
+import { FEMALE, t, type Key } from '../i18n';
 import { Character, DIRECTOR_LOOK, randomLook, type Look, type Outfit } from './characters';
 import { OUT, circle, ellipse, line, poly, rect, shade } from './draw';
 import {
   chairBack,
   codeLines,
-  coffeeMachine,
   DESK,
   SPOT,
   deskPt,
   deskSlab,
   flower,
-  fridge,
   keyboard,
   lamp,
   monitor,
@@ -26,12 +24,8 @@ import {
   newYearTree,
   phone,
   plant,
-  sink,
-  sofa,
   steam,
-  toiletCabin,
   toolbox,
-  tvStand,
   typingHand,
   waterCooler,
 } from './furniture';
@@ -51,12 +45,14 @@ import {
   isInsideRoom,
   roomById,
   roomCenter,
+  roomPoint,
   roomWorld,
   touchesOuter,
   worldToIso,
   type Pt,
   type RoomDef,
 } from './layout';
+import { LOUNGE_BLOCKS, TOILET_BLOCKS, buildLounge, buildServerRoom, buildToilet, type Lounge, type Toilet } from './rooms';
 import { THEMES, type Theme } from './theme';
 import { CHAR_SCALE, WalkerWorld } from './walkers';
 
@@ -105,7 +101,7 @@ class DeskView {
     rng: () => number,
   ) {
     // внешность постоянная: одна и та же для этого места в этой компании
-    this.look = randomLook(seeded(game.state.company * 1009 + d * 31 + k * 7 + 1), outfitOf(d));
+    this.look = randomLook(seeded(game.state.company * 1009 + d * 31 + k * 7 + 1), outfitOf(d), FEMALE[d]?.[k] ?? false);
     const slot = DESK_SLOTS[k];
     const w = roomWorld(deptRoom(d), slot.u, slot.v);
     this.root.position.set(w.x, w.y);
@@ -153,11 +149,19 @@ class DeskView {
     if (post) this.scene.addChild(toolbox(Math.max(0, this.tier('toolbox'))));
     this.scene.addChild(deskSlab(deskT));
     this.scene.addChild(keyboard(keyT));
-    const sleeve = sleeveOf(this.look);
+    const sleeve = this.look.outfit === 'sysadmin' ? this.look.color : sleeveOf(this.look);
     const kl = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] + 10, DESK.H + 2);
     const kr = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] - 10, DESK.H + 2);
-    // предплечья от локтей у края стола до клавиатуры
-    this.hands = [typingHand(kl[0] - 14, kl[1] - 9, kl[0], kl[1], sleeve, this.look.skin), typingHand(kr[0] - 13, kr[1] - 12, kr[0], kr[1], sleeve, this.look.skin)];
+    // свои руки персонажа прячем — рисуем две руки от плеч к клавиатуре (иначе было бы четыре)
+    this.char.hideArms();
+    const forearm = this.look.outfit === 'sysadmin' ? this.look.skin : sleeve;
+    const sh = (dx: number): [number, number] => [seat[0] + dx * 0.7, seat[1] - 63];
+    const [lsx, lsy] = sh(-26);
+    const [rsx, rsy] = sh(26);
+    this.hands = [
+      typingHand(lsx, lsy, lsx + 3, lsy + 20, kl[0], kl[1], sleeve, forearm, this.look.skin),
+      typingHand(rsx, rsy, rsx + 6, rsy + 18, kr[0], kr[1], sleeve, forearm, this.look.skin),
+    ];
     this.scene.addChild(...this.hands);
     // монитор дальше от сотрудника, чем клавиатура и руки, — рисуем после них
     this.scene.addChild(monitor(monT));
@@ -226,6 +230,10 @@ class RoomWalker {
   private idx = 0;
   private wait: number;
   private talking = false;
+  /** Точка, где человек садится за свой стол (−1 — нигде). */
+  sitIdx = -1;
+  sitting = false;
+  onSit: (on: boolean) => void = () => {};
 
   constructor(
     look: Look,
@@ -265,8 +273,20 @@ class RoomWalker {
   update(dt: number): void {
     const r = this.char.root;
     if (this.wait > 0) {
+      if (this.idx === this.sitIdx && !this.sitting) {
+        // дошёл до своего кресла — садится за компьютер подольше
+        this.sitting = true;
+        this.wait = 10 + this.rng() * 8;
+        r.visible = false;
+        this.onSit(true);
+      }
       this.wait -= dt;
       this.char.mode = this.talking ? 'talk' : 'idle';
+      if (this.wait <= 0 && this.sitting) {
+        this.sitting = false;
+        r.visible = true;
+        this.onSit(false);
+      }
       if (this.wait <= 0) {
         const n = this.targets.length;
         let next: number;
@@ -328,9 +348,14 @@ export class OfficeView {
   private managers: (RoomWalker | null)[] = DEPTS.map(() => null);
   private director!: RoomWalker;
   private directorDeskG = new Container();
-  private rest = { coffee: new Container(), fridge: new Container(), tv: new Container() };
-  private toilet!: ReturnType<typeof toiletCabin>;
-  private toiletBusy = false;
+  /** Зона отдыха, туалет и серверная — предметы в слое мира. */
+  private lounge: Lounge | null = null;
+  private toilet: Toilet | null = null;
+  private stallBusy: boolean[] = [];
+  private fridgeIsOpen = false;
+  private coffeeN = 0;
+  private roomItems: Container[] = [];
+  private serverItems: Container[] = [];
   readonly walkers: WalkerWorld;
   /** Замки закрытых комнат: ключ — `d<номер отдела>` или id комнаты (director, rest, toilet). */
   private locks = new Map<string, LockView>();
@@ -353,7 +378,12 @@ export class OfficeView {
     this.world.addChild(this.hireMarks);
     this.buildStatic();
     this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng, (kind) => this.slotOpen(kind));
-    this.walkers.onToilet = (busy) => this.setToilet(busy);
+    this.walkers.onToilet = (stall, busy) => this.setStall(stall, busy);
+    this.walkers.onFridge = (open) => this.setFridge(open);
+    this.walkers.onCoffee = (n) => {
+      this.coffeeN = n;
+      if (this.lounge) this.lounge.steam.visible = n > 0;
+    };
     this.walkers.onEdge = (w) => this.onWalkerEdge(`walker${this.walkers.walkers.indexOf(w)}`);
     this.syncAll();
     game.on((e) => this.onGameEvent(e));
@@ -388,13 +418,16 @@ export class OfficeView {
       if (Math.abs(rb - 0.5) < M && alongB && Math.abs(ra) > DOOR_HALF) return true;
     }
     // мебель общих зон: квадраты в координатах комнаты (u, v, полуразмер)
+    for (const [id, list] of [
+      ['rest', LOUNGE_BLOCKS],
+      ['toilet', TOILET_BLOCKS],
+    ] as const) {
+      const r = roomById(id);
+      const ua = a - (r.col * P - 0.5);
+      const vb = b - (r.row * P - 0.5);
+      for (const [u0, u1, v0, v1] of list) if (ua >= u0 && ua <= u1 && vb >= v0 && vb <= v1) return true;
+    }
     const items: [RoomDef['id'], number, number, number][] = [
-      ['rest', 0.2, 0.14, 0.12],
-      ['rest', 0.82, 0.16, 0.1],
-      ['rest', 0.36, 0.72, 0.1],
-      ['rest', 0.76, 0.78, 0.1],
-      ['toilet', 0.44, 0.22, 0.16],
-      ['toilet', 0.82, 0.5, 0.08],
       ['hall', 0.12, 0.12, 0.06],
       ['hall', 0.88, 0.12, 0.06],
       ['hall', 0.12, 0.88, 0.06],
@@ -451,6 +484,9 @@ export class OfficeView {
         const b = side === 0 ? topP : right;
         const t0 = (i + 0.2) / 6;
         const t1 = (i + 0.8) / 6;
+        // в туалете у стен этажа — кабинки и зеркала, окон там нет
+        const toiletT = 1 / (f.max - f.min);
+        if (side === 0 ? t1 > 1 - toiletT : t0 < toiletT) continue;
         const x0 = a.x + (b.x - a.x) * t0;
         const y0 = a.y + (b.y - a.y) * t0;
         const x1 = a.x + (b.x - a.x) * t1;
@@ -469,10 +505,12 @@ export class OfficeView {
     for (const def of ROOMS) this.bg.addChild(this.drawRoom(def));
 
     // мебель общих зон — в сортируемый слой
-    for (const c of [this.directorDeskG, this.rest.coffee, this.rest.fridge, this.rest.tv, this.hallDecor]) {
+    for (const c of [this.directorDeskG, this.hallDecor]) {
       if (c.parent) c.parent.removeChild(c);
     }
-    const restDef = roomById('rest');
+    // всё, что buildStatic кладёт в мир, при пересборке уничтожаем — иначе копии копятся
+    for (const c of this.roomItems) c.destroy({ children: true });
+    this.roomItems = [];
     const place = (c: Container, def: RoomDef, u: number, v: number, sx = 1, ox = 0, oy = 0): void => {
       const w = roomWorld(def, u, v);
       c.position.set(w.x, w.y);
@@ -480,22 +518,23 @@ export class OfficeView {
       c.scale.set(sx);
       c.pivot.set(ox, oy);
       this.world.addChild(c);
+      if (c !== this.directorDeskG && c !== this.hallDecor) this.roomItems.push(c);
     };
-    place(this.rest.coffee, restDef, 0.2, 0.14, 0.9, 70, 120);
-    place(this.rest.fridge, restDef, 0.82, 0.16, 0.85, 70, 138);
-    const sofaC = new Container();
-    sofaC.addChild(sofa(th.rest === 0x8ccaca ? 0x2fbfae : shade(th.rest, 0.1)));
-    place(sofaC, restDef, 0.36, 0.72, 0.9, 80, 90);
-    place(this.rest.tv, restDef, 0.78, 0.8, 0.8, 80, 104);
     this.syncRest();
 
-    const toiletDef = roomById('toilet');
-    this.toilet = toiletCabin();
-    place(this.toilet.root, toiletDef, 0.44, 0.22, 0.8, 70, 140);
-    const sk = new Container();
-    sk.addChild(sink());
-    place(sk, toiletDef, 0.82, 0.5, 0.8, 30, 40);
-    this.setToilet(this.toiletBusy);
+    // туалет: кабинки от стены до стены и раковины с зеркалами у другой стены
+    this.toilet = buildToilet(roomById('toilet'));
+    for (const c of this.toilet.items) {
+      this.world.addChild(c);
+      this.roomItems.push(c);
+    }
+    this.stallBusy = this.toilet.doors.map((_, i) => this.stallBusy[i] ?? false);
+    this.stallBusy.forEach((b, i) => this.setStall(i, b));
+
+    // серверная у сисадминов: стойки, провода, роутер, принтер
+    for (const c of this.serverItems) c.destroy({ children: true });
+    this.serverItems = buildServerRoom(deptRoom(0), 0);
+    for (const c of this.serverItems) this.world.addChild(c);
 
     const dirDef = roomById('director');
     // стол директора собран из тех же деталей, что и рабочие места, только крупнее
@@ -514,6 +553,12 @@ export class OfficeView {
       8,
       true,
     );
+    this.director.sitIdx = 0;
+    this.director.onSit = (on) => {
+      this.directorSitting = on;
+      if (this.dirSeat) this.dirSeat.root.visible = on;
+      for (const h of this.dirHands) h.visible = on;
+    };
     this.world.addChild(this.director.char.root);
 
     // холл: растения, кулер, ковёр, ёлка
@@ -525,7 +570,7 @@ export class OfficeView {
     ]) {
       const pc = new Container();
       pc.addChild(plant(th.plant, true));
-      place(pc, hall, u, v, 0.9);
+      place(pc, hall, u, v, 0.55); // цветы в холле — небольшие
     }
     const cooler = new Container();
     cooler.addChild(waterCooler());
@@ -611,13 +656,18 @@ export class OfficeView {
       }
     }
     c.addChild(g);
+    // название лежит на полу вдоль переднего ряда столов (как разметка): люди ходят поверх него
     const label = new Text({
       text: t(`room.${def.id}` as Key),
-      style: { fill: '#ffffff', fontSize: 20, fontWeight: '800', fontFamily: 'Nunito, system-ui, sans-serif', stroke: { color: '#262338', width: 4 } },
+      style: { fill: '#ffffff', fontSize: 22, fontWeight: '900', fontFamily: 'Nunito, system-ui, sans-serif', stroke: { color: shade(floor, -0.45), width: 4 } },
     });
     label.anchor.set(0.5);
-    label.position.set(ctr.x, ctr.y + hh - 26);
-    this.labels.addChild(label);
+    // ось текста — вдоль ряда (вверх-вправо по экрану), «вниз» текста — к камере: буквы лежат в плоскости пола
+    label.setFromMatrix(new Matrix(0.894, -0.447, 0.894, 0.447, 0, 0));
+    const lp = roomPoint(0.9, 0.5);
+    label.position.set(lp.x, lp.y);
+    label.alpha = 0.92;
+    c.addChild(label);
 
     const lockKey = def.kind === 'dept' ? `d${def.dept}` : def.kind === 'director' || def.kind === 'rest' || def.kind === 'toilet' ? def.kind : null;
     if (lockKey) {
@@ -775,13 +825,34 @@ export class OfficeView {
 
   private syncRest(): void {
     const r = this.game.run.rest;
-    for (const c of this.rest.coffee.removeChildren()) c.destroy({ children: true });
-    this.rest.coffee.addChild(coffeeMachine(r.coffee));
-    for (const c of this.rest.fridge.removeChildren()) c.destroy({ children: true });
-    this.rest.fridge.addChild(fridge(r.fridge));
-    for (const c of this.rest.tv.removeChildren()) c.destroy({ children: true });
-    this.rest.tv.addChild(tvStand(r.games));
+    if (this.lounge) for (const c of this.lounge.items) c.destroy({ children: true });
+    const th = this.theme;
+    this.lounge = buildLounge(roomById('rest'), r, th.rest === 0x8ccaca ? 0x2fbfae : shade(th.rest, 0.1), shade(th.rest, -0.18));
+    for (const c of this.lounge.items) this.world.addChild(c);
+    this.lounge.steam.visible = this.coffeeN > 0;
+    this.setFridge(this.fridgeIsOpen);
   }
+
+  private setFridge(open: boolean): void {
+    this.fridgeIsOpen = open;
+    if (!this.lounge) return;
+    this.lounge.fridgeOpen.visible = open;
+    this.lounge.fridgeClosed.visible = !open;
+  }
+
+  private setStall(i: number, busy: boolean): void {
+    this.stallBusy[i] = busy;
+    const d = this.toilet?.doors[i];
+    if (!d) return;
+    d.closed.visible = busy;
+    d.open.visible = !busy;
+    d.lamp.clear();
+    circle(d.lamp, 0, 0, 3.5, busy ? 0xff2d3a : 0x3ccf63);
+  }
+
+  private dirSeat: Character | null = null;
+  private dirHands: Container[] = [];
+  private directorSitting = false;
 
   /** Ковёр и картина кабинета директора (в слое мира, пересоздаются при покупке). */
   private dirDecor: Graphics[] = [];
@@ -790,7 +861,23 @@ export class OfficeView {
     const g = this.game;
     for (const c of this.directorDeskG.removeChildren()) c.destroy({ children: true });
     const t = (item: 'desk' | 'chair' | 'monitor' | 'keyboard'): number => g.dirTier(item);
-    this.directorDeskG.addChild(chairBack(t('chair')), deskSlab(t('desk')), keyboard(t('keyboard')), monitor(t('monitor')));
+    // директор за компьютером: сидит в своём кресле и печатает (виден, только когда сел)
+    this.dirSeat = new Character(DIRECTOR_LOOK, this.rng, true);
+    const seat = deskPt(SPOT.seat[0], SPOT.seat[1]);
+    this.dirSeat.root.position.set(seat[0], seat[1]);
+    this.dirSeat.root.scale.set(0.7);
+    this.dirSeat.turnFace(5);
+    this.dirSeat.hideArms();
+    this.dirSeat.root.visible = this.directorSitting;
+    const kl = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] + 10, DESK.H + 2);
+    const kr = deskPt(SPOT.keyboard[0], SPOT.keyboard[1] - 10, DESK.H + 2);
+    const sl = DIRECTOR_LOOK.color;
+    this.dirHands = [
+      typingHand(seat[0] - 18, seat[1] - 63, seat[0] - 15, seat[1] - 43, kl[0], kl[1], sl, sl, DIRECTOR_LOOK.skin),
+      typingHand(seat[0] + 18, seat[1] - 63, seat[0] + 24, seat[1] - 45, kr[0], kr[1], sl, sl, DIRECTOR_LOOK.skin),
+    ];
+    for (const h of this.dirHands) h.visible = this.directorSitting;
+    this.directorDeskG.addChild(chairBack(t('chair')), this.dirSeat.root, deskSlab(t('desk')), keyboard(t('keyboard')), ...this.dirHands, monitor(t('monitor')));
     if (g.run.dir.flower) this.directorDeskG.addChild(flower());
 
     for (const d of this.dirDecor) d.destroy();
@@ -809,21 +896,24 @@ export class OfficeView {
       this.dirDecor.push(rug);
     }
     if (g.run.dir.picture) {
-      // картина на стене кабинета со стороны зоны отдыха (u = 0), в фиксированном месте посередине
+      // картина на высокой стене этажа за директором, ровно между двумя окнами (там же, где окна: 16…56 по высоте)
       const pic = new Graphics();
-      const a = roomWorld(def, 0, 0.36);
-      const b = roomWorld(def, 0, 0.64);
-      const lo = 8;
-      const hi = WALL_H - 6;
-      poly(pic, [a.x, a.y - lo, b.x, b.y - lo, b.x, b.y - hi, a.x, a.y - hi], { fill: 0xc9a46a, line: 2.5 });
-      const k = 0.12;
-      const ix = (p: { x: number; y: number }, q: { x: number; y: number }): [number, number] => [p.x + (q.x - p.x) * k, p.y + (q.y - p.y) * k];
-      const [ax, ay] = ix(a, b);
-      const [bx, by] = ix(b, a);
-      poly(pic, [ax, ay - lo - 3, bx, by - lo - 3, bx, by - hi + 3, ax, ay - hi + 3], { fill: 0x8ee3ff, line: 0 });
-      poly(pic, [ax, ay - lo - 3, bx, by - lo - 3, bx, by - lo - 9, (ax + bx) / 2, (ay + by) / 2 - lo - 13, ax, ay - lo - 8], { fill: 0x3ccf63, line: 0 });
-      circle(pic, ax + (bx - ax) * 0.72, ay + (by - ay) * 0.72 - hi + 9, 3, { fill: 0xffd23f, line: 0 });
-      pic.zIndex = (a.y + b.y) / 2 + 1;
+      const f = floorBounds();
+      const top = { x: f.cx, y: f.cy - f.hh };
+      const right = { x: f.cx + f.hw, y: f.cy };
+      const at = (t: number, h: number): [number, number] => [top.x + (right.x - top.x) * t, top.y + (right.y - top.y) * t - h];
+      const t0 = 0.808;
+      const t1 = 0.859;
+      const frame = [...at(t0, 20), ...at(t1, 20), ...at(t1, 54), ...at(t0, 54)];
+      poly(pic, frame, { fill: 0xc9a46a, line: 2.5 });
+      const i0 = t0 + 0.004;
+      const i1 = t1 - 0.004;
+      poly(pic, [...at(i0, 24), ...at(i1, 24), ...at(i1, 50), ...at(i0, 50)], { fill: 0x8ee3ff, line: 0 });
+      // холмы и солнце — ровно в плоскости стены
+      poly(pic, [...at(i0, 24), ...at(i1, 24), ...at(i1, 33), ...at((i0 + i1) / 2, 38), ...at(i0, 32)], { fill: 0x3ccf63, line: 0 });
+      const sun = at(i0 + (i1 - i0) * 0.72, 44);
+      circle(pic, sun[0], sun[1], 3, { fill: 0xffd23f, line: 0 });
+      pic.zIndex = -9.5e5;
       this.world.addChild(pic);
       this.dirDecor.push(pic);
     }
@@ -875,15 +965,6 @@ export class OfficeView {
     return kind === 'toilet' ? this.game.roomOpen('toilet') : this.game.roomOpen('rest');
   }
 
-  private setToilet(busy: boolean): void {
-    this.toiletBusy = busy;
-    if (!this.toilet) return;
-    this.toilet.doorClosed.visible = busy;
-    this.toilet.doorOpen.visible = !busy;
-    this.toilet.lamp.clear();
-    circle(this.toilet.lamp, 53, 50, 9, { fill: busy ? 0xff2d3a : 0x3ccf63, alpha: 0.25, line: 0 });
-    circle(this.toilet.lamp, 53, 50, 5, busy ? 0xff2d3a : 0x3ccf63);
-  }
 
   setEvent(id: string | null): void {
     if (id === this.eventId) return;
@@ -1013,8 +1094,8 @@ export class OfficeView {
     out.push({
       id: 'director',
       room: 'director',
-      anchor: () => dir.anchor(),
-      groups: () => ['director', ...extra()],
+      anchor: () => (dir.sitting ? this.dirSeatAnchor() : dir.anchor()),
+      groups: () => (dir.sitting ? ['directorPC'] : ['director', ...extra()]),
       canSpeak: () => dir.isResting() && this.game.roomOpen('director'),
       talk: (on) => dir.setTalking(on),
     });
@@ -1022,7 +1103,7 @@ export class OfficeView {
       out.push({
         id: `walker${i}`,
         room: w.hidden ? 'toilet' : w.speaker().room,
-        anchor: () => (w.hidden ? this.toiletAnchor() : { x: w.pos.x, y: w.pos.y - 60 }),
+        anchor: () => ({ x: w.pos.x, y: w.pos.y - (w.hidden ? 72 : 60) }),
         groups: () => {
           const s = w.speaker();
           if (w.hidden) return ['toilet'];
@@ -1035,9 +1116,12 @@ export class OfficeView {
     return out;
   }
 
-  private toiletAnchor(): Pt {
-    const w = roomWorld(roomById('toilet'), 0.44, 0.22);
-    return { x: w.x, y: w.y - 110 };
+
+  /** Над головой директора, когда он сидит за столом. */
+  private dirSeatAnchor(): Pt {
+    const seat = deskPt(SPOT.seat[0], SPOT.seat[1]);
+    const p = this.directorDeskG.toGlobal({ x: seat[0], y: seat[1] - 122 });
+    return this.world.toLocal(p);
   }
 
   /** Значки над комнатами: в зоне отдыха можно что-то улучшить; у директора новое задание. */
@@ -1100,7 +1184,17 @@ export class OfficeView {
     for (const v of this.desks.values()) v.update(dt, typingSpeed);
     for (const m of this.managers) m?.update(dt);
     this.director.update(dt);
+    if (this.directorSitting && this.dirSeat) {
+      this.dirSeat.update(dt);
+      this.dirHands.forEach((h, i) => (h.y = -3 * Math.max(0, Math.sin(this.time * 17 + i * Math.PI))));
+    }
     this.walkers.update(dt);
+    // огоньки серверных стоек и отблеск телевизора
+    for (const it of this.serverItems) {
+      const lights = it.children.find((ch) => ch.label === 'lights') as Container | undefined;
+      lights?.children.forEach((l, i) => (l.alpha = 0.35 + 0.65 * ((Math.sin(this.time * 3 + i * 1.7) + 1) / 2)));
+    }
+    if (this.lounge) this.lounge.glow.alpha = 0.6 + 0.4 * Math.sin(this.time * 7) * Math.sin(this.time * 2.3);
     for (let i = this.popups.length - 1; i >= 0; i--) {
       const p = this.popups[i];
       p.age += dt;

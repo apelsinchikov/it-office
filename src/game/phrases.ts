@@ -9,6 +9,7 @@ export interface Phrase {
 
 export type PhraseGroup =
   | 'director'
+  | 'directorPC'
   | 'support'
   | 'supportLead'
   | 'dev'
@@ -34,6 +35,27 @@ export type PhraseGroup =
 const p = (ru: string, en: string, rare = false): Phrase => (rare ? { ru, en, rare } : { ru, en });
 
 export const PHRASES: Record<PhraseGroup, Phrase[]> = {
+  // директор за своим компьютером
+  directorPC: [
+    p('Нужно составить отчёт.', 'I need to put together a report.'),
+    p('Нужно написать гневное письмо.', 'Time to write an angry email.'),
+    p('Нужно поздравить сотрудников с днём рождения.', 'I should congratulate the staff on their birthdays.'),
+    p('Так, ставлю всех в копию.', 'Right, cc-ing everyone.'),
+    p('«Коллеги, напоминаю…» Отправить.', '"Colleagues, a reminder…" Send.'),
+    p('Сто непрочитанных. Отмечу всё прочитанным.', 'A hundred unread. Mark all as read.'),
+    p('Согласовать бюджет… Не согласовать.', 'Approve the budget… Not approved.'),
+    p('Где этот шаблон презентации?', 'Where is that slide template?'),
+    p('Нужно утвердить график отпусков.', 'I need to sign off the vacation schedule.'),
+    p('Надо добавить в отчёт больше графиков.', 'The report needs more charts.'),
+    p('Перенесу встречу. И эту тоже.', "I'll move this meeting. And that one."),
+    p('Напишу «спасибо всем за работу». С восклицательным знаком.', 'I\'ll write "thanks everyone for your work". With an exclamation mark.'),
+    p('Почему Excel опять завис?', 'Why did Excel freeze again?'),
+    p('Нужно подписать приказ о премии… потом.', 'I need to sign the bonus order… later.'),
+    p('Отвечу «принято». Коротко и по делу.', 'I\'ll reply "noted". Short and to the point.'),
+    p('Кто опять поставил мне встречу на обед?', 'Who booked a meeting over my lunch again?'),
+    p('Нужно заполнить KPI за квартал.', 'I need to fill in the quarterly KPIs.'),
+    p('Так, где у нас тут кнопка «Ответить всем»?', 'Now where is the "Reply all" button?', true),
+  ],
   director: [
     p('Нужно усерднее работать!', 'We need to work harder!'),
     p('Нужно собрать встречу.', 'We need to set up a meeting.'),
@@ -301,6 +323,18 @@ export const PHRASES: Record<PhraseGroup, Phrase[]> = {
     p("Это моя кружка. С котиком.", "That's my mug. The one with the cat."),
     p("Ещё чашечку — и за работу. Ну, ещё одну.", "One more cup and back to work. Okay, one more."),
     p("Говорят, директор купит новую кофемашину.", "Rumor is the director will buy a new coffee machine."),
+    p('Ммм, какой вкусный кофе.', 'Mmm, what a tasty coffee.'),
+    p('Кофе бодрит лучше любого дедлайна.', 'Coffee wakes you up better than any deadline.'),
+    p('Третья чашка — и я снова человек.', 'Third cup and I feel human again.'),
+    p('Без кофе код не компилируется.', "Code doesn't compile without coffee."),
+    p('Кофе — это жидкая мотивация.', 'Coffee is liquid motivation.'),
+    p('Аромат как в настоящей кофейне.', 'Smells like a real coffee shop.'),
+    p('Эспрессо — и в бой.', 'One espresso and off to battle.'),
+    p('А я чай пью. Успокаивает перед релизом.', "I drink tea. It calms me before a release."),
+    p('Капучино с пенкой — моё всё.', 'A frothy cappuccino is my everything.'),
+    p('Этот кофе спас мой понедельник.', 'This coffee saved my Monday.'),
+    p('Ещё глоточек — и за таски.', 'One more sip and back to tasks.'),
+    p('Кто-то опять выпил последнее молоко!', 'Someone drank the last of the milk again!'),
     p("Уже третий кофе, а ещё не обед.", "Third coffee and it's not even lunch."),
     p("Ты на созвоне? Тогда помолчу.", "Are you on a call? I'll keep quiet."),
     p("Кофемашина просит воды. И я.", "The coffee machine wants water. So do I."),

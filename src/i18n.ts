@@ -255,6 +255,15 @@ export function t(key: Key, params?: Record<string, string | number>): string {
   return s;
 }
 
+/** Женские имена (по номерам отделов и мест, одинаково для ru и en): у них и персонаж женский. */
+export const FEMALE: boolean[][] = [
+  [false, false, false, false, false, false],
+  [true, false, true, false, true, false],
+  [true, false, true, false, true, false],
+  [false, false, true, false, true, false],
+  [true, false, true, false, true, false],
+];
+
 /** Имена сотрудников по отделам. */
 export const NAMES: Record<Lang, string[][]> = {
   // по номерам отделов: сисадмины, поддержка, аналитики, разработка, тестирование

@@ -4,6 +4,7 @@ import { Container } from 'pixi.js';
 import type { PhraseGroup } from '../game/phrases';
 import { Character, randomLook, type Dir, type Outfit } from './characters';
 import { P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
+import { LOUNGE_SPOTS, toiletSpots } from './rooms';
 
 /** Клетка сетки: 1/16 комнаты — в коридоре 3–4 клетки, хватает на отступы от стен и на обход. */
 const CELL = 1 / 16;
@@ -149,7 +150,9 @@ export interface Slot {
   id: string;
   pos: Pt;
   dir: Dir;
-  kind: 'coffee' | 'sofa' | 'viewer' | 'fridge' | 'toilet';
+  kind: 'coffee' | 'sofa' | 'viewer' | 'fridge' | 'toilet' | 'sink';
+  /** Номер кабинки для 'toilet'. */
+  index?: number;
   /** Кто занял или идёт сюда. */
   by: Walker | null;
 }
@@ -206,7 +209,7 @@ export class Walker {
   speaker(): SpeakerInfo {
     if (this.slot?.kind === 'coffee') return { room: 'rest', group: 'coffee' };
     if (this.slot?.kind === 'sofa' || this.slot?.kind === 'viewer' || this.slot?.kind === 'fridge') return { room: 'rest', group: 'sofa' };
-    if (this.slot?.kind === 'toilet') return { room: 'toilet', group: 'toilet' };
+    if (this.slot?.kind === 'toilet' || this.slot?.kind === 'sink') return { room: 'toilet', group: 'toilet' };
     if (this.atEdge) return { room: this.world.roomName(this.pos), group: 'edge' };
     return { room: this.world.roomName(this.pos), group: this.rng() < 0.5 ? 'coffee' : 'bonus' };
   }
@@ -220,10 +223,14 @@ export class Walker {
     this.char.root.position.set(this.pos.x, this.pos.y);
     this.char.root.zIndex = this.pos.y;
     if (this.seated) {
-      this.seated.root.position.set(this.pos.x, this.pos.y);
+      // сидит на подушке дивана — чуть выше пола
+      this.seated.root.position.set(this.pos.x, this.pos.y - 10);
       this.seated.root.zIndex = this.pos.y + 1;
     }
   }
+
+  /** Только что вышел из кабинки — следом идёт мыть руки. */
+  private afterToilet = false;
 
   /** Бросить текущую цель и встать на ближайшую свободную клетку. */
   reset(): void {
@@ -240,9 +247,12 @@ export class Walker {
 
   private release(): void {
     if (this.slot) {
-      if (this.slot.kind === 'toilet') this.world.toilet(false);
+      if (this.slot.kind === 'toilet') this.world.toilet(this.slot.index ?? 0, false);
+      if (this.slot.kind === 'fridge') this.world.fridge(false);
+      if (this.slot.kind === 'coffee') this.char.hold(null);
       this.slot.by = null;
       this.slot = null;
+      this.world.coffeeChanged();
     }
     if (this.seated) {
       this.seated.root.visible = false;
@@ -262,20 +272,15 @@ export class Walker {
     this.release();
     this.atEdge = false;
     const r = this.rng();
-    const want: Slot['kind'][] =
-      this.kind === 'coffee'
-        ? ['coffee']
-        : this.kind === 'gamer'
-          ? ['sofa', 'viewer']
-          : r < 0.12
-            ? ['fridge']
-            : r < 0.24
-              ? ['toilet']
-              : r < 0.34
-                ? ['coffee']
-                : [];
-    // кофейники и игроки иногда тоже бродят — так места меняются
-    const roam = (this.kind !== 'roamer' && this.rng() < 0.25) || want.length === 0;
+    let want: Slot['kind'][];
+    if (this.afterToilet) {
+      this.afterToilet = false;
+      want = ['sink'];
+    } else if (this.kind === 'coffee') want = ['coffee'];
+    else if (this.kind === 'gamer') want = ['sofa', 'viewer'];
+    else want = r < 0.14 ? ['fridge'] : r < 0.28 ? ['toilet'] : r < 0.36 ? ['coffee'] : r < 0.44 ? ['viewer'] : [];
+    // любители кофе от кофемашины не отходят; игроки иногда встают размяться
+    const roam = want.length === 0 || (this.kind === 'gamer' && this.rng() < 0.2);
     if (!roam) {
       const slot = this.world.freeSlot(want, this.rng);
       if (slot) {
@@ -301,29 +306,44 @@ export class Walker {
       this.char.setDir(this.slot.dir);
       switch (this.slot.kind) {
         case 'coffee':
-          this.wait = 40 + this.rng() * 20;
+          // стоит с кружкой и пьёт кофе
+          this.char.hold('mug');
+          this.char.mode = 'drink';
+          this.wait = this.kind === 'coffee' ? 25 + this.rng() * 25 : 10 + this.rng() * 6;
+          this.world.coffeeChanged();
           break;
         case 'sofa':
-          this.wait = 60 + this.rng() * 60;
+          this.wait = 50 + this.rng() * 50;
           if (!this.seated) {
             this.seated = new Character(this.char.look, this.rng, true);
             this.seated.root.scale.set(CHAR_SCALE);
             this.world.layer.addChild(this.seated.root);
           }
+          this.seated.setDir(this.slot.dir);
+          this.seated.hold('pad');
+          this.seated.mode = 'game';
           this.seated.root.visible = true;
           this.char.root.visible = false;
           break;
         case 'viewer':
-          this.wait = 30 + this.rng() * 40;
+          this.wait = 15 + this.rng() * 20;
+          this.char.mode = 'talk';
           break;
         case 'fridge':
-          this.wait = 8 + this.rng() * 4;
+          this.wait = 4 + this.rng() * 3;
+          this.world.fridge(true);
           break;
         case 'toilet':
-          this.wait = 6 + this.rng() * 2;
+          this.wait = 6 + this.rng() * 3;
           this.hidden = true;
           this.char.root.visible = false;
-          this.world.toilet(true);
+          this.world.toilet(this.slot.index ?? 0, true);
+          this.afterToilet = true;
+          break;
+        case 'sink':
+          // моет руки
+          this.wait = 3 + this.rng() * 2;
+          this.char.mode = 'repair';
           break;
       }
     } else if (this.atEdge) {
@@ -333,7 +353,7 @@ export class Walker {
       this.markLeft = 1.6;
       this.world.edge(this);
     } else {
-      this.wait = 1 + this.rng() * 3;
+      this.wait = 1 + this.rng() * 2.5;
     }
   }
 
@@ -422,7 +442,10 @@ export class WalkerWorld {
   nav: NavGrid;
   readonly slots: Slot[] = [];
   readonly walkers: Walker[] = [];
-  onToilet: (busy: boolean) => void = () => {};
+  onToilet: (stall: number, busy: boolean) => void = () => {};
+  onFridge: (open: boolean) => void = () => {};
+  /** Сколько человек сейчас у кофемашины (для пара). */
+  onCoffee: (n: number) => void = () => {};
   /** Прохожий упёрся в стену этажа — пусть что-нибудь скажет. */
   onEdge: (w: Walker) => void = () => {};
 
@@ -438,17 +461,19 @@ export class WalkerWorld {
     const toilet = roomById('toilet');
     const at = (def: RoomDef, u: number, v: number): Pt => roomWorld(def, u, v);
     // места: кофемашина 3, диван 2 + 1 зритель, холодильник 1, туалет 1
-    this.slots.push(
-      { id: 'coffee1', pos: at(rest, 0.4, 0.2), dir: 3, kind: 'coffee', by: null },
-      { id: 'coffee2', pos: at(rest, 0.44, 0.32), dir: 3, kind: 'coffee', by: null },
-      { id: 'coffee3', pos: at(rest, 0.32, 0.4), dir: 2, kind: 'coffee', by: null },
-      { id: 'sofa1', pos: at(rest, 0.3, 0.7), dir: 0, kind: 'sofa', by: null },
-      { id: 'sofa2', pos: at(rest, 0.42, 0.62), dir: 0, kind: 'sofa', by: null },
-      { id: 'viewer', pos: at(rest, 0.2, 0.55), dir: 0, kind: 'viewer', by: null },
-      { id: 'fridge', pos: at(rest, 0.7, 0.32), dir: 2, kind: 'fridge', by: null },
-      { id: 'toilet', pos: at(toilet, 0.4, 0.5), dir: 2, kind: 'toilet', by: null },
-    );
-    const kinds: WalkerKind[] = ['coffee', 'coffee', 'coffee', 'gamer', 'gamer', 'roamer', 'roamer', 'roamer'];
+    for (const [i, [u, v, dir]] of LOUNGE_SPOTS.coffee.entries()) this.slots.push({ id: `coffee${i}`, pos: at(rest, u, v), dir: dir as Dir, kind: 'coffee', by: null });
+    for (const [i, [u, v, dir]] of LOUNGE_SPOTS.sofa.entries()) this.slots.push({ id: `sofa${i}`, pos: at(rest, u, v), dir: dir as Dir, kind: 'sofa', by: null });
+    {
+      const [u, v, dir] = LOUNGE_SPOTS.viewer;
+      this.slots.push({ id: 'viewer', pos: at(rest, u, v), dir: dir as Dir, kind: 'viewer', by: null });
+      const [fu, fv, fdir] = LOUNGE_SPOTS.fridge;
+      this.slots.push({ id: 'fridge', pos: at(rest, fu, fv), dir: fdir as Dir, kind: 'fridge', by: null });
+    }
+    const ts = toiletSpots();
+    ts.stalls.forEach(([u, v], i) => this.slots.push({ id: `stall${i}`, pos: at(toilet, u, v), dir: 3, kind: 'toilet', index: i, by: null }));
+    ts.sinks.forEach(([u, v], i) => this.slots.push({ id: `sink${i}`, pos: at(toilet, u, v), dir: 2, kind: 'sink', by: null }));
+    // двое всегда у кофемашины, двое играют на приставке, четверо гуляют
+    const kinds: WalkerKind[] = ['coffee', 'coffee', 'gamer', 'gamer', 'roamer', 'roamer', 'roamer', 'roamer'];
     for (const k of kinds) {
       const w = new Walker(k, this, rng, this.nav.randomCell(rng, false));
       this.walkers.push(w);
@@ -468,8 +493,16 @@ export class WalkerWorld {
     for (const w of this.walkers) w.reset();
   }
 
-  toilet(busy: boolean): void {
-    this.onToilet(busy);
+  toilet(stall: number, busy: boolean): void {
+    this.onToilet(stall, busy);
+  }
+
+  fridge(open: boolean): void {
+    this.onFridge(open);
+  }
+
+  coffeeChanged(): void {
+    this.onCoffee(this.slots.filter((s) => s.kind === 'coffee' && s.by && s.by.isResting()).length);
   }
 
   edge(w: Walker): void {

@@ -112,20 +112,13 @@ export function monitor(tier: number): Graphics {
   const [a, b] = SPOT.monitor;
   const H = DESK.H;
   const base = deskPt(a, b, H);
-  if (tier === 0) {
-    // старый ЭЛТ-монитор: коробка
-    const w = 13;
-    poly(g, flat(deskPt(a - 4, b - w, H), deskPt(a - 4, b + w, H), deskPt(a - 4, b + w, H + 24), deskPt(a - 4, b - w, H + 24)), 0xd6c7a3);
-    poly(g, flat(deskPt(a - 4, b + w, H), deskPt(a + 8, b + w, H), deskPt(a + 8, b + w, H + 24), deskPt(a - 4, b + w, H + 24)), 0xc4b38c);
-    poly(g, flat(deskPt(a - 4, b - w, H + 24), deskPt(a + 8, b - w, H + 24), deskPt(a + 8, b + w, H + 24), deskPt(a - 4, b + w, H + 24)), 0xefe4c8);
-    return g;
-  }
-  const w = [0, 15, 18, 21][tier];
-  const h = [0, 22, 25, 28][tier];
+  // 0 — простой серый монитор, дальше крупнее и современнее
+  const w = [13, 15, 18, 21][tier];
+  const h = [19, 22, 25, 28][tier];
   const z = H + 10;
   ellipse(g, base[0], base[1], 9, 4, 0x454b63);
   rect(g, base[0] - 2.5, base[1] - 12, 5, 12, 0, OUT);
-  const body = tier === 3 ? 0x2f3344 : tier === 2 ? 0xd9dbe6 : 0x5a6078;
+  const body = tier === 3 ? 0x2f3344 : tier === 2 ? 0xd9dbe6 : tier === 1 ? 0x5a6078 : 0x9aa0b4;
   // торец (толщина) справа-снизу, потом задняя крышка
   poly(g, flat(deskPt(a, b + w, z), deskPt(a + 3, b + w, z), deskPt(a + 3, b + w, z + h), deskPt(a, b + w, z + h)), OUT);
   poly(g, flat(deskPt(a + 3, b - w, z), deskPt(a + 3, b + w, z), deskPt(a + 3, b + w, z + h), deskPt(a + 3, b - w, z + h)), body);
@@ -201,13 +194,14 @@ export function flower(): Container {
   return g;
 }
 
-/** Предплечье с кистью: от плеча (x0, y0) к клавише (x1, y1). */
-export function typingHand(x0: number, y0: number, x1: number, y1: number, sleeve: number, skin: number): Container {
+/** Рука, печатающая на клавиатуре: плечо → локоть → кисть (у коротких рукавов предплечье цвета кожи). */
+export function typingHand(sx: number, sy: number, ex: number, ey: number, hx: number, hy: number, sleeve: number, forearm: number, skin: number): Container {
   const c = new Container();
   const g = new Graphics();
-  line(g, [x0, y0, x1, y1], OUT, 9);
-  line(g, [x0, y0, x1, y1], sleeve, 5);
-  circle(g, x1, y1 + 1, 4.5, skin);
+  line(g, [sx, sy, ex, ey, hx, hy], OUT, 12);
+  line(g, [sx, sy, ex, ey], sleeve, 8);
+  line(g, [ex, ey, hx, hy], forearm, 7);
+  circle(g, hx, hy + 1, 5, skin);
   c.addChild(g);
   return c;
 }

@@ -684,6 +684,7 @@ export function questsPanel(ctx: Ctx): Panel {
 
 const GROUP_TITLE: Record<PhraseGroup, Key> = {
   director: 'room.director',
+  directorPC: 'room.director',
   support: 'room.support',
   supportLead: 'room.support',
   dev: 'room.dev',

@@ -64,6 +64,8 @@ export class Hud {
   private readonly sheetTitle: HTMLElement;
   private readonly sheetSub: HTMLElement;
   private readonly sheetBody: HTMLElement;
+  /** Сколько монет сейчас — видно и в меню улучшений. */
+  private readonly sheetCoins: HTMLElement;
   private readonly nav: HTMLElement;
   private readonly navBtns = new Map<string, HTMLButtonElement>();
   private readonly questBadge: HTMLElement;
@@ -114,7 +116,14 @@ export class Hud {
     const close = h('button', { class: 'icon-btn', html: ICONS.close, aria: t('close') });
     close.addEventListener('click', () => this.close());
     this.sheetBody = h('div', { class: 'sheet-body' });
-    this.sheetEl = h('section', { class: 'sheet hidden', attrs: { 'aria-live': 'polite' } }, h('div', { class: 'sheet-head' }, h('div', {}, this.sheetTitle, this.sheetSub), close), this.sheetBody);
+    this.sheetCoins = h('span', { class: 'coins-value' });
+    const sheetMoney = h('div', { class: 'sheet-coins' }, h('span', { class: 'coin-icon', text: 'tc', aria: 'techCoin' }), this.sheetCoins);
+    this.sheetEl = h(
+      'section',
+      { class: 'sheet hidden', attrs: { 'aria-live': 'polite' } },
+      h('div', { class: 'sheet-head' }, h('div', { class: 'sheet-titles' }, this.sheetTitle, this.sheetSub), sheetMoney, close),
+      this.sheetBody,
+    );
 
     // меню
     this.questBadge = h('span', { class: 'badge' });
@@ -243,6 +252,7 @@ export class Hud {
     this.best = bestPurchase(this.game);
     this.panel.refresh();
     this.sheetSub.textContent = this.panel.sub?.() ?? '';
+    this.sheetCoins.textContent = formatNumber(this.game.run.coins);
     this.sheetBody.scrollTop = scroll;
   }
 
@@ -303,6 +313,7 @@ export class Hud {
     if (now - this.last < 200) return;
     this.last = now;
     this.coins.textContent = formatNumber(g.run.coins);
+    if (this.sheet) this.sheetCoins.textContent = formatNumber(g.run.coins);
     this.rate.textContent = `+${formatNumber(g.incomePerSec())}${t('perSec')}`;
     this.grantsChip.innerHTML = `${ICONS.star}<span>${formatNumber(g.state.grants)}</span>`;
     this.grantsChip.classList.toggle('pulse', g.reorgIsGood());

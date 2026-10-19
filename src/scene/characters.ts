@@ -17,6 +17,8 @@ export interface Look {
   shoes: number;
   acc: Acc[];
   lashes?: boolean;
+  /** Женский персонаж: длинные волосы, ресницы, у стоящих — юбка. */
+  fem?: boolean;
 }
 
 export const SKINS = [0xffe0bd, 0xffcf9e, 0xe8b48a, 0xc68642, 0xa86b3c, 0x7a4a2a];
@@ -27,9 +29,13 @@ const LONG_HAIR = new Set([3, 4, 5, 6, 10]);
 
 const pick = <T>(rng: () => number, xs: readonly T[]): T => xs[Math.floor(rng() * xs.length) % xs.length];
 
-/** Случайная внешность сотрудника отдела. */
-export function randomLook(rng: () => number, outfit: Outfit): Look {
-  const hair = Math.floor(rng() * HAIR_STYLES);
+const FEM_HAIR = [3, 4, 5, 6, 10];
+const MALE_HAIR = Array.from({ length: HAIR_STYLES }, (_, i) => i).filter((i) => !LONG_HAIR.has(i));
+
+/** Случайная внешность сотрудника отдела; fem — женщина (по имени), undefined — случайно. */
+export function randomLook(rng: () => number, outfit: Outfit, fem?: boolean): Look {
+  const female = fem ?? rng() < 0.5;
+  const hair = female ? pick(rng, FEM_HAIR) : pick(rng, MALE_HAIR);
   const look: Look = {
     skin: pick(rng, SKINS),
     hair,
@@ -39,7 +45,8 @@ export function randomLook(rng: () => number, outfit: Outfit): Look {
     pants: pick(rng, [0x3552a8, 0x454b63, 0x2f3444, 0xc9a46a, 0x6b7a4a]),
     shoes: pick(rng, [0xffffff, 0x262338, 0x8a5a33, 0x5b3d2a]),
     acc: [],
-    lashes: LONG_HAIR.has(hair) && rng() < 0.7,
+    lashes: female,
+    fem: female,
   };
   switch (outfit) {
     case 'support':
@@ -78,6 +85,7 @@ export function randomLook(rng: () => number, outfit: Outfit): Look {
     case 'director':
       break;
   }
+  if (female) look.acc = look.acc.filter((a) => a !== 'beard');
   if (look.acc.includes('beard')) look.lashes = false;
   return look;
 }
@@ -110,7 +118,11 @@ function legsG(look: Look, side: 'L' | 'R', back: boolean): Graphics {
     }
     return g;
   }
-  rect(g, x, 164, 13, 32, 5, back ? shade(look.pants, -0.12) : look.pants);
+  if (look.fem && look.outfit !== 'sysadmin') {
+    // юбка до колен и ноги
+    rect(g, x + 3, 176, 7, 20, 3, look.skin);
+    p(g, side === 'L' ? 'M44 162 L61 162 L61 182 L40 182 Z' : 'M59 162 L76 162 L80 182 L59 182 Z', back ? shade(look.pants, -0.12) : look.pants);
+  } else rect(g, x, 164, 13, 32, 5, back ? shade(look.pants, -0.12) : look.pants);
   if (look.outfit === 'sysadmin') rect(g, x + 1, 174, 8, 9, 2, { fill: shade(look.pants, -0.15), line: 2 });
   rect(g, side === 'L' ? 41 : 60, back ? 192 : 190, 19, back ? 10 : 12, 6, look.shoes);
   return g;
@@ -462,7 +474,8 @@ function buildBack(look: Look): Rig {
   return { view, legL, legR, bob, armL, armR, torso, head, backHair: null, eyes: null, mouth: null };
 }
 
-export type Mode = 'idle' | 'walk' | 'sit' | 'repair' | 'talk';
+/** drink — стоит с кружкой и отпивает; game — сидит с геймпадом; repair — руки заняты (чинит, моет руки). */
+export type Mode = 'idle' | 'walk' | 'sit' | 'repair' | 'talk' | 'drink' | 'game';
 /** Направление: 0 — вправо-вниз, 1 — влево-вниз, 2 — вправо-вверх, 3 — влево-вверх. */
 export type Dir = 0 | 1 | 2 | 3;
 
@@ -518,6 +531,41 @@ export class Character {
       this.back.view.scale.x = flip;
       this.back.view.x = flip < 0 ? 120 : 0;
     }
+  }
+
+  private mugC: Container | null = null;
+  private padG: Graphics | null = null;
+
+  /** Что в руках: кружка (пьёт кофе), геймпад (играет) или ничего. */
+  hold(prop: 'mug' | 'pad' | null): void {
+    if (prop === 'mug' && !this.mugC) {
+      const c = new Container();
+      const g = new Graphics();
+      rect(g, 80, 146, 14, 15, 3, 0xffffff);
+      p(g, 'M94 150 Q101 153 94 157', { fill: 0xffffff, line: 2.5 });
+      ellipse(g, 87, 146, 7, 2.5, { fill: 0x7a4a22, line: 2 });
+      c.addChild(g);
+      c.pivot.set(86, 158);
+      c.position.set(86, 158);
+      this.front.armR.addChild(c);
+      this.mugC = c;
+    }
+    if (prop === 'pad' && !this.padG) {
+      const g = new Graphics();
+      rect(g, 44, 140, 32, 13, 6, 0x2f3344);
+      circle(g, 52, 146, 2.5, { fill: 0x4fb3ff, line: 0 });
+      circle(g, 68, 146, 2.5, { fill: 0xe8173a, line: 0 });
+      this.front.bob.addChild(g);
+      this.padG = g;
+    }
+    if (this.mugC) this.mugC.visible = prop === 'mug';
+    if (this.padG) this.padG.visible = prop === 'pad';
+  }
+
+  /** Спрятать свои руки (за столом их рисует рабочее место — руки на клавиатуре). */
+  hideArms(): void {
+    this.front.armL.visible = false;
+    this.front.armR.visible = false;
   }
 
   /** Повернуть лицо на 3/4: глаза и рот сдвигаются в сторону взгляда (px в координатах рисунка). */
@@ -581,6 +629,20 @@ export class Character {
         this.phase += dt * 7 * this.speed;
         r.armR.rotation = -40 * DEG + 18 * DEG * Math.sin(this.phase);
         r.armL.rotation = -10 * DEG + 6 * DEG * Math.sin(this.phase * 0.5);
+      } else if (this.mode === 'drink') {
+        // держит кружку у груди, раз в несколько секунд подносит ко рту
+        this.phase += dt;
+        const cyc = this.phase % 5.2;
+        const sip = cyc < 1.5 ? Math.sin((cyc / 1.5) * Math.PI) : 0;
+        r.armR.rotation = 0.95 + 1.35 * sip;
+        r.head.rotation = -6 * DEG * sip;
+        if (this.mugC) this.mugC.rotation = -r.armR.rotation - 0.5 * sip;
+      } else if (this.mode === 'game') {
+        // жмёт кнопки геймпада
+        this.phase += dt * 9 * this.speed;
+        r.armR.rotation = 0.95 + 0.07 * Math.sin(this.phase);
+        r.armL.rotation = -0.95 - 0.07 * Math.sin(this.phase * 1.3);
+        r.head.rotation = 2 * DEG * Math.sin(this.phase * 0.2);
       } else if (this.mode === 'talk') {
         this.phase += dt * 10;
         if (r.mouth) r.mouth.scale.y = 1 + 0.4 * Math.max(0, Math.sin(this.phase));
