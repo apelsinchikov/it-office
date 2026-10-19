@@ -157,7 +157,8 @@ class DeskView {
     this.hands = [typingHand(seat[0] - 10, seat[1] - 52, kl[0], kl[1], sleeve, this.look.skin), typingHand(seat[0] + 14, seat[1] - 56, kr[0], kr[1], sleeve, this.look.skin)];
     this.scene.addChild(...this.hands);
     this.code = codeLines(monT);
-    this.scene.addChild(...this.code);
+    // addChild() без аргументов в Pixi 8 падает — пустой список не передаём
+    if (this.code.length) this.scene.addChild(...this.code);
     if (this.tier('phone') >= 0) this.scene.addChild(phone(this.tier('phone')));
     if (this.tier('mouse') >= 0) this.scene.addChild(mouse(this.tier('mouse')));
     if (post) {
