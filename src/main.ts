@@ -236,11 +236,25 @@ async function start(): Promise<void> {
 
   // Видеокарта может отобрать контекст WebGL, пока игра долго в фоне: экран становится чёрным.
   // Сохраняемся и перезапускаемся, когда контекст можно вернуть.
+  let contextLostCount = 0;
   app.canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
+    contextLostCount++;
+    console.warn(`[webgl] context lost #${contextLostCount} at`, new Date().toISOString());
     saveAll();
   });
-  app.canvas.addEventListener('webglcontextrestored', () => location.reload());
+  app.canvas.addEventListener('webglcontextrestored', () => {
+    console.warn(`[webgl] context restored #${contextLostCount} at`, new Date().toISOString());
+    location.reload();
+  });
+  // Логгер: следим за перерисовкой canvas
+  const origResize = app.renderer.resize.bind(app.renderer);
+  let resizeCount = 0;
+  app.renderer.resize = (w, h) => {
+    resizeCount++;
+    console.warn(`[resize] #${resizeCount} to ${w}x${h} at`, new Date().toISOString());
+    origResize(w, h);
+  };
 
   // ?debug — доступ к игре из консоли для проверки
   if (location.search.includes('debug'))
