@@ -58,6 +58,7 @@ export class Hud {
   private readonly rate: HTMLElement;
   private readonly grantsChip: HTMLButtonElement;
   private readonly eventChip: HTMLElement;
+  private readonly eventMod: HTMLElement;
   /** Действующие перки директора. */
   private readonly perksEl: HTMLElement;
   private readonly avralBtn: HTMLButtonElement;
@@ -97,14 +98,17 @@ export class Hud {
     this.rate = h('span', { class: 'rate' });
     this.grantsChip = h('button', { class: 'chip grants-chip', aria: t('nav.grants') });
     this.grantsChip.addEventListener('click', () => this.toggle({ kind: 'grants' }));
-    this.eventChip = h('span', { class: 'chip event-chip' });
+    this.eventChip = h('div', { class: 'event-chip' });
     this.eventChip.style.display = 'none';
+    this.eventMod = h('span', { class: 'event-mod' });
+    this.eventMod.style.display = 'none';
+    const eventWrapper = h('div', { class: 'event-wrapper' }, this.eventChip, this.eventMod);
     this.perksEl = h('div', { class: 'perks' });
     const top = h(
       'div',
       { class: 'topbar' },
       h('div', { class: 'coins' }, h('span', { class: 'coin-icon', text: 'tc', aria: 'techCoin' }), h('div', { class: 'coins-col' }, this.coins, this.rate)),
-      h('div', { class: 'chips' }, this.eventChip, this.grantsChip),
+      h('div', { class: 'chips' }, eventWrapper, this.grantsChip),
     );
 
     // «Аврал»
@@ -289,9 +293,24 @@ export class Hud {
     this.modal.classList.remove('hidden');
   }
 
-  setEvent(text: string | null): void {
-    this.eventChip.textContent = text ?? '';
-    this.eventChip.style.display = text ? '' : 'none';
+  setEvent(text: string | null, mod?: { incomeMult: number; deptMult: number[]; ticketFreqMult: number }): void {
+    if (!text) {
+      this.eventChip.style.display = 'none';
+      this.eventMod.style.display = 'none';
+      return;
+    }
+    this.eventChip.style.display = '';
+    this.eventChip.textContent = text;
+    if (mod) {
+      const parts: string[] = [];
+      if (mod.incomeMult > 1) parts.push(`доход ×${mod.incomeMult}`);
+      if (mod.deptMult.some(v => v > 1)) parts.push(`отдел ×${mod.deptMult.filter(v => v > 1)[0]}`);
+      if (mod.ticketFreqMult > 1) parts.push(`тикеты ×${mod.ticketFreqMult}`);
+      this.eventMod.textContent = parts.join(' · ');
+      this.eventMod.style.display = '';
+    } else {
+      this.eventMod.style.display = 'none';
+    }
   }
 
   /** Каждый кадр; DOM обновляем 5 раз в секунду. */

@@ -5,7 +5,7 @@ import { play, setSound, unlockAudio } from './audio';
 import { checkAchievements, ACHIEVEMENTS } from './game/achievements';
 import { companyDef } from './game/config';
 import { directorTick } from './game/director';
-import { eventIdAt, eventMod } from './game/events';
+import { eventIdAt, eventMod, type EventId } from './game/events';
 import { Game } from './game/game';
 import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
@@ -367,7 +367,7 @@ async function start(): Promise<void> {
   // Используем originalLastSeen из локального сохранения, а не синхронизированный —
   // иначе offerOffline считает "0 секунд" когда Supabase хранит свежий lastSeen
   else offerOffline((Date.now() - originalLastSeen) / 1000);
-  if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
+  if (eventId) hud.setEvent(t(`event.${eventId}` as Key), eventMod(eventId as EventId | null));
 
   // свёрнута игра — не тикаем, при возврате считаем офлайн
   let hiddenAt = 0;
@@ -417,7 +417,7 @@ async function start(): Promise<void> {
       if (id !== eventId) {
         eventId = id;
         office.setEvent(id);
-        hud.setEvent(id ? t(`event.${id}` as Key) : null);
+        hud.setEvent(id ? t(`event.${id}` as Key) : null, id ? eventMod(id as EventId | null) : undefined);
       }
     }
   }, 1000);
