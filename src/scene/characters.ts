@@ -491,7 +491,6 @@ function buildFront(look: Look, withLegs: boolean): Rig {
     // headC.addChild(faceSprite);
 
     // Фото-лицо поверх кожи
-    const faceTex = FACE_TEXTURE_REF ?? Texture.from(look.faceCanvas!);
 
     // Обрезаем фото на canvas
     const maskedCanvas = document.createElement('canvas');
