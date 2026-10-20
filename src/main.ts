@@ -31,10 +31,19 @@ const SAVE_CLOUD_MS = 45000;
 const OFFLINE_MIN_SEC = 60;
 
 /**
+ * Результат предзагрузки.
+ */
+interface PreloadResult {
+  state: GameState;
+  /** Оригинальный lastSeen из локального сохранения ДО синхронизации. */
+  originalLastSeen: number;
+}
+
+/**
  * Предзагрузка: ждать tg.user, синхронизировать cloud/Supabase,
  * вернуть готовый GameState. Всё — ДО рендеринга игры.
  */
-async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<GameState> {
+async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<PreloadResult> {
   // 1. Ждём tg.user (до 3 секунд)
   const user = await waitForUser(tg);
 
@@ -44,6 +53,12 @@ async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<GameSt
 
   // 3. Локальное сохранение
   let state = loadLocal();
+
+  // Сохраняем оригинальный lastSeen ДО синхронизации — нужен для расчёта офлайн-дохода.
+  // Без этого синхронизированный state может содержать свежий lastSeen (например,
+  // если пользователь закрыл игру на другом устройстве и lastSeen обновился),
+  // и offerOffline посчитает офлайн как "0 секунд".
+  const originalLastSeen = state.lastSeen;
 
   // 4. Проверяем сброс
   const resetsUrl = `${import.meta.env.BASE_URL}resets.json`;
@@ -83,14 +98,15 @@ async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<GameSt
   setLang(state.settings.lang ?? detectLang(user?.language_code));
   setSound(state.settings.sound);
 
-  return best;
+  return { state: best, originalLastSeen };
 }
 
 async function start(): Promise<void> {
   const tg = initTelegram();
 
   // Предзагрузка: ждём tg.user, синхронизируем cloud/Supabase
-  let state = await preloadState(tg);
+  const result = await preloadState(tg);
+  const { state, originalLastSeen } = result;
 
   const rng = Math.random;
   const game = new Game(state, rng);
@@ -319,7 +335,9 @@ async function start(): Promise<void> {
   // старт: обучение или поддержка крупным планом
   focusRoom(roomById('sysadmins'), true);
   if (!game.state.tutorialDone) tutorial.start();
-  else offerOffline((Date.now() - game.state.lastSeen) / 1000);
+  // Используем originalLastSeen из локального сохранения, а не синхронизированный —
+  // иначе offerOffline считает "0 секунд" когда Supabase хранит свежий lastSeen
+  else offerOffline((Date.now() - originalLastSeen) / 1000);
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
 
   // свёрнута игра — не тикаем, при возврате считаем офлайн
