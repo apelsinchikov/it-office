@@ -453,3 +453,40 @@ export function newYearTree(): Graphics {
   poly(g, [0, -88, 4, -80, 12, -80, 6, -75, 8, -67, 0, -72, -8, -67, -6, -75, -12, -80, -4, -80], { fill: 0xffd23f, line: 2 });
   return g;
 }
+
+/** Подарок для дня рождения. */
+export function giftBox(): Graphics {
+  const g = new Graphics();
+
+  // Тень
+  ellipse(g, 0, 2, 14, 5, { fill: OUT, alpha: 0.14, line: 0 });
+
+  const boxColor = 0x4fc3f7;  // светло-голубой
+  const boxDark  = 0x29b6f6;  // чуть темнее
+  const ribbon   = 0xe8173a;  // красный бант
+
+  // Коробка — основа
+  rect(g, -14, -16, 28, 16, 2, boxColor);
+
+  // Крышка — чуть шире
+  rect(g, -15, -22, 30, 7, 2, boxDark);
+
+  // Вертикальная лента
+  rect(g, -2, -16, 4, 16, 0, boxColor);
+
+  // Горизонтальная лента на крышке
+  rect(g, -15, -19.5, 30, 2.5, 0, boxColor);
+
+  // Бант — два ушка
+  ellipse(g, -5, -23, 5, 3.5, ribbon);
+  ellipse(g, 5, -23, 5, 3.5, ribbon);
+
+  // Узелок
+  circle(g, 0, -22, 2, ribbon);
+
+  // Хвостики ленты
+  line(g, [-4, -20, -7, -17], ribbon, 2);
+  line(g, [4, -20, 7, -17], ribbon, 2);
+
+  return g;
+}

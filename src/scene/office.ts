@@ -22,6 +22,7 @@ import {
   mouse,
   mug,
   newYearTree,
+  giftBox,
   phone,
   plant,
   steam,
@@ -1005,6 +1006,13 @@ export class OfficeView {
         this.top.addChild(s);
         this.snow.push(s);
       }
+    } else if (this.eventId === 'kirillBday') {
+      this.hallDecor.addChild(giftBox());
+      const w = roomWorld(hall, 0.5, 0.5);
+      this.hallDecor.position.set(w.x, w.y);
+      this.hallDecor.zIndex = w.y;
+      this.hallDecor.scale.set(1.3);
+      this.world.addChild(this.hallDecor);
     }
   }
 
