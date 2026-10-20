@@ -19,6 +19,7 @@ import * as drawM from './scene/draw';
 import * as furnitureM from './scene/furniture';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
+import { FACE_IMG_REF, FACE_TEXTURE, setTesterFace, TESTER_LOOK } from './scene/characters';
 import { initTelegram, onTelegramLayout, waitForUser } from './telegram';
 import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
@@ -132,7 +133,35 @@ async function start(): Promise<void> {
   // Скрыть лоадер
   const loader = document.getElementById('loader');
   if (loader) loader.classList.add('hidden');
+  
+  // предзагрузка фото-лица для тестировщика (ждём onload и texture creation)
+  console.log('=== FACE PRELOAD START ===');
+  const faceImg = new Image();
+  faceImg.crossOrigin = 'anonymous';
+  faceImg.src = FACE_TEXTURE;
+  await new Promise<void>(async (resolve) => {
+    if (faceImg.complete && faceImg.naturalWidth > 0) {
+      FACE_IMG_REF.value = faceImg;
+      await setTesterFace(faceImg);
+      resolve();
+    } else {
+      faceImg.onload = async () => {
+        FACE_IMG_REF.value = faceImg;
+        await setTesterFace(faceImg);
+        resolve();
+      };
+      faceImg.onerror = (e) => {
+        console.error('Face image ERROR loading:', e);
+        FACE_IMG_REF.value = null;
+        resolve();
+      };
+    }
+  });
+  console.log('=== FACE PRELOAD DONE ===');
 
+  // экспорт для отладки
+  (window as any).__faceImgRef = FACE_IMG_REF;
+  (window as any).__characters = { TESTER_LOOK, setTesterFace };
   const office = new OfficeView(game, rng);
   office.setEvent(eventId);
   app.renderer.background.color = office.themeBg;

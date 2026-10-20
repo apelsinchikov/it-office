@@ -1,8 +1,72 @@
 // Модульные персонажи в стиле Б и их анимация.
 // Все координаты — в «единицах персонажа» рисунка 120×220 (как на холсте). Ноги стоят в точке (60, 204).
 
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Texture, Sprite as PixiSprite } from 'pixi.js';
 import { OUT, circle, ellipse, line, p, rect, shade, stroke } from './draw';
+
+/** Data URL для фото-лица тестировщика (используется как src изображения в main.ts). */
+export const FACE_TEXTURE = 'data:image/png;base64,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';
+
+/** Предзагруженное изображение лица — устанавливается в main.ts ДО создания OfficeView. */
+export const FACE_IMG_REF = { value: null as HTMLImageElement | null };
+
+/** Предсозданная PixiJS текстура для фото-лица — устанавливается в setTesterFace. */
+export let FACE_TEXTURE_REF: Texture | null = null;
+/** Храним bitmap чтобы GC не уничтожил его до загрузки на GPU. */
+let _faceBitmap: ImageBitmap | null = null;
+
+/** Фиксированный персонаж с фото-лицом (для тестировщиков).
+ *  Меняй параметры ниже, чтобы настроить внешность:
+ *  - skin: индекс из SKINS (0–5)
+ *  - hair: индекс из HAIR_STYLES (0–11)
+ *  - hairColor: индекс из HAIR_COLORS (0–7)
+ *  - outfit: 'manager' — костюм, 'director' — платье директора
+ *  - color: цвет футболки/костюма (hex)
+ *  - pants: цвет штанов (hex)
+ *  - shoes: цвет обуви (hex)
+ *  - acc: аксессуары ['glasses', 'beard', 'cap', 'headphones', 'headset']
+ *  - lashes: ресницы (только для женских)
+ *  - fem: женский персонаж
+ */
+export let TESTER_LOOK: Look = {
+  skin: 0,
+  hair: 1,
+  hairColor: 1,
+  outfit: 'manager',
+  color: 0x2f45a8,
+  pants: 0x24358a,
+  shoes: 0x262338,
+  acc: [],
+  lashes: false,
+};
+
+/** Установить лицо для тестировщика из HTMLImageElement. */
+export async function setTesterFace(img: HTMLImageElement): Promise<void> {
+  // Создаём canvas с белым фоном и рисуем фото
+  const canvas = document.createElement('canvas');
+  canvas.width = 60;
+  canvas.height = 60;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 60, 60);
+  ctx.drawImage(img, 0, 0, 60, 60);
+
+  // Создаём ImageBitmap → текстуру PixiJS
+  try {
+    _faceBitmap = await createImageBitmap(canvas);
+    FACE_TEXTURE_REF = Texture.from(_faceBitmap);
+    console.log('Face texture created:', FACE_TEXTURE_REF?.source?.width, 'x', FACE_TEXTURE_REF?.source?.height);
+  } catch (e) {
+    console.error('Failed to create face texture:', e);
+    FACE_TEXTURE_REF = null;
+  }
+
+  TESTER_LOOK.faceCanvas = canvas;
+  console.log('TESTER_LOOK.faceCanvas set:', !!TESTER_LOOK.faceCanvas);
+}
+
+// экспорт для отладки
+(window as any).__characters = { TESTER_LOOK, setTesterFace };
 
 export type Outfit = 'support' | 'dev' | 'qa' | 'analyst' | 'sysadmin' | 'manager' | 'director';
 export type Acc = 'glasses' | 'beard' | 'cap' | 'headphones' | 'headset';
@@ -19,6 +83,8 @@ export interface Look {
   lashes?: boolean;
   /** Женский персонаж: длинные волосы, ресницы, у стоящих — юбка. */
   fem?: boolean;
+  /** Предсозданный canvas для фото-лица (для PixiJS). */
+  faceCanvas?: HTMLCanvasElement;
 }
 
 export const SKINS = [0xffe0bd, 0xffcf9e, 0xe8b48a, 0xc68642, 0xa86b3c, 0x7a4a2a];
@@ -400,35 +466,124 @@ function buildFront(look: Look, withLegs: boolean): Rig {
   const torso = wrap(torsoG(look, false), 60, 170);
   bob.addChild(armL, armR, torso, wrap(neckG(look), 60, 106), wrap(chestG(look), 60, 106));
 
-  const headG = new Graphics();
-  circle(headG, 60, 66, 30, look.skin);
-  frontHair(headG, look);
-  if (look.lashes) {
-    line(headG, [45, 64, 42, 60], OUT, 2);
-    line(headG, [75, 64, 78, 60], OUT, 2);
+  // === HEAD ===
+  let head: Container;
+  let eyes: Container | null = null;
+  let mouth: Graphics | null = null;
+
+  if (look.faceCanvas) {
+    // === PHOTO FACE ===
+    const headC = new Container();
+
+    // Кожа — фон
+    const skin = new Graphics();
+    circle(skin, 60, 66, 30, look.skin);
+    headC.addChild(skin);
+
+    // Фото-лицо поверх кожи
+    // const faceTex = FACE_TEXTURE_REF ?? Texture.from(look.faceCanvas!);
+    // const faceSprite = new PixiSprite(faceTex);
+    // faceSprite.width = 60;
+    // faceSprite.height = 60;
+    // faceSprite.anchor.set(0.5);
+    // faceSprite.x = 60;
+    // faceSprite.y = 66;
+    // headC.addChild(faceSprite);
+
+    // Фото-лицо поверх кожи
+    const faceTex = FACE_TEXTURE_REF ?? Texture.from(look.faceCanvas!);
+
+    // Обрезаем фото на canvas
+    const maskedCanvas = document.createElement('canvas');
+    const r = 32;
+    maskedCanvas.width = r * 2;
+    maskedCanvas.height = r * 2;
+    const ctx = maskedCanvas.getContext('2d')!;
+    ctx.clearRect(0, 0, maskedCanvas.width, maskedCanvas.height);
+    ctx.beginPath();
+    ctx.arc(r, r, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(look.faceCanvas!, -7.3, -8, 60 * 0.95 + 16, 60 * 0.95 + 16);
+
+    const faceSprite = new PixiSprite(Texture.from(maskedCanvas));
+    faceSprite.anchor.set(0.5);
+    faceSprite.x = 60;
+    faceSprite.y = 66;
+    faceSprite.width = r * 2;
+    faceSprite.height = r * 2;
+
+    headC.addChild(faceSprite);
+
+
+    // Волосы, ресницы, румяна
+    // const hairG = new Graphics();
+    // frontHair(hairG, look);
+    // // if (look.lashes) {
+    // //   line(hairG, [45, 64, 42, 60], OUT, 2);
+    // //   line(hairG, [75, 64, 78, 60], OUT, 2);
+    // // }
+    // //ellipse(hairG, 42, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
+    // //ellipse(hairG, 78, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
+    // headC.addChild(hairG);
+
+    // Глаза
+    // const eyesG = new Graphics();
+    // ellipse(eyesG, 49, 70, 4, 5.5, { fill: OUT, line: 0 });
+    // ellipse(eyesG, 71, 70, 4, 5.5, { fill: OUT, line: 0 });
+    // circle(eyesG, 50.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
+    // circle(eyesG, 72.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
+    // eyes = wrap(eyesG, 60, 70);
+    // headC.addChild(eyes!);
+
+    // // Рот
+    // const mouthG = new Graphics();
+    // if (look.outfit === 'director') p(mouthG, 'M55 83 Q60 88 65 83 Q60 85 55 83 Z', { fill: 0xe8173a, line: 0 });
+    // else stroke(mouthG, 'M55 84 Q60 89 65 84', OUT, 2.5);
+    // mouthG.pivot.set(60, 84);
+    // mouthG.position.set(60, 84);
+    // mouth = mouthG;
+    // headC.addChild(mouth);
+
+    // Аксессуары
+    // const accG = new Graphics();
+    // accFront(accG, look);
+    // headC.addChild(accG);
+
+    head = headC;
+  } else {
+    // === STANDARD FACE ===
+    const headG = new Graphics();
+    circle(headG, 60, 66, 30, look.skin);
+    frontHair(headG, look);
+    if (look.lashes) {
+      line(headG, [45, 64, 42, 60], OUT, 2);
+      line(headG, [75, 64, 78, 60], OUT, 2);
+    }
+    ellipse(headG, 42, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
+    ellipse(headG, 78, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
+    head = wrap(headG, 60, 98);
+
+    const eyesG = new Graphics();
+    ellipse(eyesG, 49, 70, 4, 5.5, { fill: OUT, line: 0 });
+    ellipse(eyesG, 71, 70, 4, 5.5, { fill: OUT, line: 0 });
+    circle(eyesG, 50.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
+    circle(eyesG, 72.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
+    eyes = wrap(eyesG, 60, 70);
+    head.addChild(eyes!);
+
+    const mouthG = new Graphics();
+    if (look.outfit === 'director') p(mouthG, 'M55 83 Q60 88 65 83 Q60 85 55 83 Z', { fill: 0xe8173a, line: 0 });
+    else stroke(mouthG, 'M55 84 Q60 89 65 84', OUT, 2.5);
+    mouthG.pivot.set(60, 84);
+    mouthG.position.set(60, 84);
+    mouth = mouthG;
+    head.addChild(mouth);
+
+    const accG = new Graphics();
+    accFront(accG, look);
+    head.addChild(accG);
   }
-  ellipse(headG, 42, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
-  ellipse(headG, 78, 79, 4.5, 4.5, { fill: 0xff8a8a, alpha: 0.5, line: 0 });
-  const head = wrap(headG, 60, 98);
 
-  const eyesG = new Graphics();
-  ellipse(eyesG, 49, 70, 4, 5.5, { fill: OUT, line: 0 });
-  ellipse(eyesG, 71, 70, 4, 5.5, { fill: OUT, line: 0 });
-  circle(eyesG, 50.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
-  circle(eyesG, 72.5, 67.5, 1.5, { fill: 0xffffff, line: 0 });
-  const eyes = wrap(eyesG, 60, 70);
-  head.addChild(eyes);
-
-  const mouth = new Graphics();
-  if (look.outfit === 'director') p(mouth, 'M55 83 Q60 88 65 83 Q60 85 55 83 Z', { fill: 0xe8173a, line: 0 });
-  else stroke(mouth, 'M55 84 Q60 89 65 84', OUT, 2.5);
-  mouth.pivot.set(60, 84);
-  mouth.position.set(60, 84);
-  head.addChild(mouth);
-
-  const acc = new Graphics();
-  accFront(acc, look);
-  head.addChild(acc);
   bob.addChild(head);
   view.addChild(bob);
   return { view, legL, legR, bob, armL, armR, torso, head, backHair, eyes, mouth };

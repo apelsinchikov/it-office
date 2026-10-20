@@ -230,6 +230,7 @@ const D = {
   'event.newyear': ['Новый год: доход +10%', 'New Year: income +10%'],
   'event.sysadminDay': ['День сисадмина: сисадмины ×2', 'Sysadmin Day: sysadmins ×2'],
   'event.hackathon': ['Хакатон: разработка ×1,5, тикетов вдвое больше', 'Hackathon: dev ×1.5, twice the tickets'],
+  'event.kirillBday': ['День рождения Кирилла! Миша, поздравляю с днем рождения сына! 🎂', 'Kirill\'s birthday! Misha, congrats on your son! 🎂'],
   // тосты
   'toast.achievement': ['Достижение: {name}', 'Achievement: {name}'],
   'toast.quest': ['Задание выполнено — заберите награду', 'Quest complete — claim your reward'],

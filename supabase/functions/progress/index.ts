@@ -30,7 +30,10 @@ Deno.serve(async (req) => {
   if (!url) return new Response(JSON.stringify({ error: 'not_configured' }), { status: 500, headers })
 
   try {
-    const { action, telegram_id, state, company_no, lifetime, score, save_created_at, force, p_limit } = await req.json()
+    const body = await req.json()
+    const { action, telegram_id, state, company_no, lifetime, score, save_created_at, force, p_limit } = body
+
+    console.log('progress:', JSON.stringify({ action, telegram_id }))
 
     const supabase = createClient(url, key('secret'), { auth: { persistSession: false, autoRefreshToken: false } })
 
@@ -63,6 +66,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400, headers })
   } catch (err) {
+    console.error('progress error:', err.message, err.stack)
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers })
   }
 })

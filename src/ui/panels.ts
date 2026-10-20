@@ -707,6 +707,7 @@ const GROUP_TITLE: Record<PhraseGroup, Key> = {
   newyear: 'event.newyear',
   sysadminDay: 'event.sysadminDay',
   hackathon: 'event.hackathon',
+  kirillBday: 'event.kirillBday',
 };
 
 export function collectionPanel(ctx: Ctx, tab: { v: 'ach' | 'phr' }): Panel {

@@ -2,7 +2,7 @@
 
 import { Container } from 'pixi.js';
 import type { PhraseGroup } from '../game/phrases';
-import { Character, randomLook, type Dir, type Outfit } from './characters';
+import { Character, TESTER_LOOK, randomLook, type Dir, type Outfit } from './characters';
 import { P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
 import { LOUNGE_SPOTS, toiletSpots } from './rooms';
 
@@ -479,6 +479,20 @@ export class WalkerWorld {
       this.walkers.push(w);
       layer.addChild(w.char.root);
     }
+    // тестировщик с фото-лицом — стоит в центре холла, смотрит на камеру
+    const hall = roomById('hall');
+    const hallCenter = roomWorld(hall, 0.5, 0.5);
+    const tester = new Walker('gamer', this, rng, this.nav.randomCell(rng, false));
+    tester.pos = hallCenter;
+    tester.hidden = true; // не ходит
+    Object.defineProperty(tester, 'char', { value: new Character(TESTER_LOOK, rng) });
+    tester.char.root.scale.set(CHAR_SCALE);
+    tester.char.root.position.set(hallCenter.x, hallCenter.y);
+    tester.char.root.zIndex = hallCenter.y;
+    tester.char.setDir(0); // смотрит на камеру
+    tester.char.mode = 'idle'; // стоит на месте
+    layer.addChild(tester.char.root);
+    this.walkers.push(tester);
   }
 
   freeSlot(kinds: Slot['kind'][], rng: () => number): Slot | null {

@@ -30,7 +30,8 @@ export type PhraseGroup =
   | 'space'
   | 'newyear'
   | 'sysadminDay'
-  | 'hackathon';
+  | 'hackathon'
+  | 'kirillBday';
 
 const p = (ru: string, en: string, rare = false): Phrase => (rare ? { ru, en, rare } : { ru, en });
 
@@ -476,6 +477,9 @@ export const PHRASES: Record<PhraseGroup, Phrase[]> = {
     p("У нас 48 часов и ни одной идеи.", "We have 48 hours and zero ideas."),
     p("Презентация готова. Продукта нет.", "The pitch deck is ready. The product is not."),
     p("Кто спит под столом? А, это капитан команды.", "Who's sleeping under the desk? Oh, the team lead.", true),
+  ],
+  kirillBday: [
+    p('С днём рождения, Кирилл! Миша, гордись сыном!', 'Happy birthday, Kirill! Misha, be proud of your son!'),
   ],
 };
 

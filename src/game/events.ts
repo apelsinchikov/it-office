@@ -3,7 +3,7 @@
 import { DEPTS, deptIndex } from './config';
 import { NO_EVENT, type EventMod } from './game';
 
-export type EventId = 'newyear' | 'sysadminDay' | 'hackathon';
+export type EventId = 'newyear' | 'sysadminDay' | 'hackathon' | 'kirillBday';
 
 /** Дата по Москве (UTC+3) как объект с полями UTC. */
 export function moscow(nowMs: number): Date {
@@ -32,6 +32,7 @@ export function eventIdAt(nowMs: number): EventId | null {
   // Хакатон: первая суббота месяца и воскресенье после неё
   const dow = m.getUTCDay();
   if ((dow === 6 && day <= 7) || (dow === 0 && day >= 2 && day <= 8)) return 'hackathon';
+  if (month === 9 && day === 21) return 'kirillBday';
   return null;
 }
 
@@ -45,6 +46,9 @@ export function eventMod(id: EventId | null): EventMod {
       return { id, incomeMult: 1, deptMult: dept, ticketFreqMult: 1 };
     case 'hackathon':
       dept[deptIndex('dev')] = 1.5;
+      return { id, incomeMult: 1, deptMult: dept, ticketFreqMult: 2 };
+    case 'kirillBday':
+      dept[deptIndex('dev')] = 2;
       return { id, incomeMult: 1, deptMult: dept, ticketFreqMult: 2 };
     default:
       return NO_EVENT;
