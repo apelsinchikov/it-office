@@ -38,6 +38,8 @@ export interface TelegramInfo {
   user?: TgUser;
   /** Строка для проверки на сервере (Edge Function). Пустая вне Telegram. */
   initData: string;
+  /** Live-объект от Telegram SDK. Обновляется асинхронно, не снимок. */
+  initDataUnsafe: { user?: TgUser };
   platform: string;
 }
 
@@ -48,12 +50,37 @@ export function onTelegramLayout(cb: () => void): void {
   for (const ev of ['fullscreenChanged', 'safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']) tg.onEvent(ev, cb);
 }
 
+/**
+ * Подождать появления tg.initDataUnsafe.user с таймаутом.
+ * На десктопе Telegram SDK может подгрузить user через 100-500мс.
+ */
+export async function waitForUser(
+  tg: TelegramInfo,
+  timeout = 3000,
+): Promise<TgUser | undefined> {
+  if (tg.initDataUnsafe?.user) return tg.initDataUnsafe.user;
+
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      if (tg.initDataUnsafe?.user) {
+        resolve(tg.initDataUnsafe.user);
+      } else if (Date.now() - start > timeout) {
+        resolve(undefined);
+      } else {
+        setTimeout(check, 200);
+      }
+    };
+    check();
+  });
+}
+
 export function initTelegram(): TelegramInfo {
   const tg = window.Telegram?.WebApp;
   // Вне Telegram SDK тоже загружается, но tg не определён.
   // В Telegram Desktop initData может быть пустым, но tg.platform определён.
   if (!tg) {
-    return { insideTelegram: false, initData: '', platform: 'browser' };
+    return { insideTelegram: false, initData: '', initDataUnsafe: {}, platform: 'browser' };
   }
 
   tg.ready();
@@ -111,6 +138,7 @@ export function initTelegram(): TelegramInfo {
     insideTelegram: true,
     user,
     initData,
+    initDataUnsafe: tg.initDataUnsafe,
     platform: tg.platform,
   };
 }

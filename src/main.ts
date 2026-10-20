@@ -19,7 +19,7 @@ import * as drawM from './scene/draw';
 import * as furnitureM from './scene/furniture';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
-import { initTelegram, onTelegramLayout } from './telegram';
+import { initTelegram, onTelegramLayout, waitForUser } from './telegram';
 import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
 import { DebugNotes } from './ui/debugNotes';
@@ -30,20 +30,67 @@ const SAVE_LOCAL_MS = 5000;
 const SAVE_CLOUD_MS = 45000;
 const OFFLINE_MIN_SEC = 60;
 
-async function start(): Promise<void> {
-  const tg = initTelegram();
-  setRemoteAuth({ init_data: tg.initData, telegram_id: tg.user?.id || 0 });
+/**
+ * Предзагрузка: ждать tg.user, синхронизировать cloud/Supabase,
+ * вернуть готовый GameState. Всё — ДО рендеринга игры.
+ */
+async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<GameState> {
+  // 1. Ждём tg.user (до 3 секунд)
+  const user = await waitForUser(tg);
+
+  // 2. Обновляем авторизацию
+  const telegram_id = user?.id || 0;
+  setRemoteAuth({ init_data: tg.initData, telegram_id });
+
+  // 3. Локальное сохранение
   let state = loadLocal();
-  // сброс конкретного игрока по списку public/resets.json (один раз: новое сохранение моложе отметки)
-  const resetAt = await fetchResetBefore(tg.user, `${import.meta.env.BASE_URL}resets.json`);
+
+  // 4. Проверяем сброс
+  const resetsUrl = `${import.meta.env.BASE_URL}resets.json`;
+  const resetAt = await fetchResetBefore(user, resetsUrl);
   const wasReset = resetAt > 0 && state.createdAt < resetAt;
   if (wasReset) {
     state = newState();
     clearLocal();
     saveLocal(state);
   }
-  setLang(state.settings.lang ?? detectLang(tg.user?.language_code));
+
+  // 5. СИНХРОНИЗАЦИЯ — до рендеринга
+  const [cloud, remote] = await Promise.allSettled([loadCloud(), loadRemote()]);
+  const cloudResult = cloud.status === 'fulfilled' ? cloud.value : null;
+  const remoteResult = remote.status === 'fulfilled'
+    ? remote.value
+    : { state: null, saveCreatedAt: 0, failed: true };
+
+  const fresh = (c: GameState | null): GameState | null =>
+    (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
+
+  const best = better(better(state, fresh(cloudResult)), fresh(remoteResult.state));
+
+  if (best !== state) {
+    saveLocal(best);
+    const remoteOk = fresh(remoteResult.state);
+    const remoteStale = !!remoteResult.state && !remoteOk;
+    await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
+  } else {
+    // данные совпали — отправляем локальный прогресс в Supabase
+    if (telegram_id > 0 && !remoteResult.failed) {
+      void saveRemote(best, wasReset);
+    }
+  }
+
+  // 6. Язык и звук
+  setLang(state.settings.lang ?? detectLang(user?.language_code));
   setSound(state.settings.sound);
+
+  return best;
+}
+
+async function start(): Promise<void> {
+  const tg = initTelegram();
+
+  // Предзагрузка: ждём tg.user, синхронизируем cloud/Supabase
+  let state = await preloadState(tg);
 
   const rng = Math.random;
   const game = new Game(state, rng);
@@ -58,7 +105,6 @@ async function start(): Promise<void> {
   const gameEl = document.getElementById('game') ?? document.body;
   const app = new Application();
   await app.init({
-    // размер берём у контейнера #game (он на весь экран), а не у window: так его отслеживает ResizeObserver ниже
     resizeTo: gameEl,
     background: '#262338',
     antialias: true,
@@ -66,6 +112,10 @@ async function start(): Promise<void> {
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
   gameEl.appendChild(app.canvas);
+
+  // Скрыть лоадер
+  const loader = document.getElementById('loader');
+  if (loader) loader.classList.add('hidden');
 
   const office = new OfficeView(game, rng);
   office.setEvent(eventId);
@@ -271,26 +321,6 @@ async function start(): Promise<void> {
   if (!game.state.tutorialDone) tutorial.start();
   else offerOffline((Date.now() - game.state.lastSeen) / 1000);
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key));
-
-  // при входе сверяем три копии: на устройстве, в Telegram CloudStorage и в Supabase — берём самую продвинутую
-  void Promise.all([loadCloud(), loadRemote()]).then(async ([cloud, remote]) => {
-    // копии старше отметки сброса устарели и не возвращаются
-    const fresh = (c: GameState | null): GameState | null => (c && resetAt > 0 && c.createdAt < resetAt ? null : c);
-    const cloudOk = fresh(cloud);
-    const remoteOk = fresh(remote.state);
-    const remoteStale = !!remote.state && !remoteOk;
-    const best = better(better(game.state, cloudOk), remoteOk);
-    if (best !== game.state) {
-      // прогресс дальше в другой копии: записываем его везде и перезапускаемся с ним
-      saveLocal(best);
-      await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
-      location.reload();
-      return;
-    }
-    if (wasReset || (cloud && !cloudOk)) void saveCloud(game.state);
-    // первый вход после появления Supabase: текущий прогресс уходит на сервер
-    if (!remote.failed) void saveRemote(game.state, wasReset || remoteStale);
-  });
 
   // свёрнута игра — не тикаем, при возврате считаем офлайн
   let hiddenAt = 0;
