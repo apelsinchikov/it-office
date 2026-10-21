@@ -670,6 +670,7 @@ export class Game {
     this.state.companyGrants += g;
     this.state.reorgs++;
     this.state.stats.reorgs++;
+    this.state.companyReorgs++;
     this.resetRun();
     this.emit({ type: 'reorg', grants: g });
     return g;
@@ -761,6 +762,7 @@ export class Game {
     this.state.stats.reorgs++;
     this.state.company++;
     this.state.companyGrants = 0;
+    this.state.companyReorgs = 0;
     this.state.cultureBank = this.cultureMult();
     this.state.companyCulture = 0;
     this.resetRun();

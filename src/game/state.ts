@@ -79,6 +79,8 @@ export interface GameState {
   grantsEarned: number;
   /** Гранты, полученные в текущей компании, — с ними сравнивается подсказка «выгодно». */
   companyGrants: number;
+  /** Количество реорганизаций в текущей компании. */
+  companyReorgs: number;
   /** Уровни «Корпоративной культуры», купленные в текущей компании: от них считается цена. */
   companyCulture: number;
   /** Множитель культуры, накопленный в прошлых компаниях (произведение их бонусов). */
@@ -133,6 +135,7 @@ export function newState(now = Date.now()): GameState {
     grants: 0,
     grantsEarned: 0,
     companyGrants: 0,
+    companyReorgs: 0,
     companyCulture: 0,
     cultureBank: 1,
     reorgs: 0,
@@ -221,6 +224,7 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
   out.grants = num(s.grants);
   out.grantsEarned = num(s.grantsEarned);
   out.companyGrants = num(s.companyGrants, out.company === 1 ? out.grantsEarned : 0);
+  out.companyReorgs = Math.max(0, Math.floor(num(s.companyReorgs)));
   out.companyCulture = num(s.companyCulture, out.company === 1 ? num(out.shop.culture) : 0);
   out.cultureBank = Math.max(1, num(s.cultureBank, 1));
   out.reorgs = Math.max(0, Math.floor(num(s.reorgs)));

@@ -168,6 +168,7 @@ const D = {
   'rating.empty': ['Пока в рейтинге никого нет.', 'Nobody is in the rating yet.'],
   'rating.note': ['Сначала — у кого номер компании больше, затем — кто больше заработал за всю игру.', 'Higher company number first, then more money earned over the whole game.'],
   'rating.company': ['Компания №{n}', 'Company #{n}'],
+  'rating.reorgs': ['Реорганизаций: {n}', 'Reorganizations: {n}'],
   'rating.you': ['Вы', 'You'],
   'rating.noName': ['Без имени', 'No name'],
   // гранты

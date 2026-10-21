@@ -845,14 +845,15 @@ function ratingRow(r: RatingRow): HTMLElement {
       'span',
       { class: 'rating-who' },
       h('span', { class: 'rating-name', text: (r.name || t('rating.noName')) + (r.me ? ` · ${t('rating.you')}` : '') }),
-      h('span', { class: 'note small', text: t('rating.company', { n: r.company }) }),
+      h('span', { class: 'note small', text: r.companyProgress !== undefined ? t('rating.company', { n: r.company }) + ` · ${r.companyProgress}%` : t('rating.company', { n: r.company }) }),
+      h('span', { class: 'note small', text: r.companyReorgs > 0 ? ` · ${t('rating.reorgs', { n: r.companyReorgs })}` : '' }),
     ),
     h('span', { class: 'rating-sum' }, h('span', { class: 'coin-icon', text: 'tc' }), h('span', { text: fmt(r.lifetime) })),
   );
 }
 
 export function ratingPanel(ctx: Ctx): Panel {
-  void ctx;
+  const g = ctx.game;
   const body = h('div', { class: 'panel-body' });
   const list = h('div', { class: 'rating-list' });
   body.append(h('p', { class: 'note small', text: t('rating.note') }), list);
@@ -865,7 +866,12 @@ export function ratingPanel(ctx: Ctx): Panel {
         if (!top.length) list.append(h('p', { class: 'note', text: t('rating.empty') }));
         for (const r of top) list.append(ratingRow(r));
         // игрок не в первой сотне — его строка отдельно внизу
-        if (me && !top.some((r) => r.me)) list.append(h('div', { class: 'rating-gap', text: '…' }), ratingRow(me));
+        if (me && !top.some((r) => r.me)) {
+          // добавляем локальный прогресс для игрока
+          me.companyProgress = Math.floor(g.completion() * 100);
+          me.companyReorgs = g.state.companyReorgs;
+          list.append(h('div', { class: 'rating-gap', text: '…' }), ratingRow(me));
+        }
       })
       .catch(() => list.replaceChildren(h('p', { class: 'note', text: t('rating.error') })));
   }

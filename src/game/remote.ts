@@ -65,6 +65,7 @@ export async function saveRemote(s: GameState, force = false): Promise<boolean> 
       score: progressScore(s),
       save_created_at: Math.floor(s.createdAt),
       force,
+      company_reorgs: s.companyReorgs,
     }) as { success: boolean };
     return !!r?.success;
   } catch {
@@ -78,6 +79,8 @@ export interface RatingRow {
   place: number;
   name: string;
   company: number;
+  companyProgress: number;
+  companyReorgs: number;
   lifetime: number;
   me: boolean;
 }
