@@ -2,7 +2,7 @@
 // Всё рисуется в координатах комнаты (u, v — доли от 0 до 1, h — высота в пикселях), поэтому предметы
 // стоят ровно на полу и вдоль стен, а не «висят». У каждого предмета свой zIndex — по его переднему краю.
 
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 import { OUT, circle, ellipse, line, poly, rect, shade } from './draw';
 import { roomWorld, type RoomDef } from './layout';
 
@@ -309,7 +309,7 @@ export function toiletSpots(): { stalls: [number, number][]; sinks: [number, num
 
 export interface Toilet {
   items: Container[];
-  doors: { closed: Graphics; open: Graphics; lamp: Graphics }[];
+  doors: { closed: Graphics; open: Graphics; lamp: Graphics; closedSign: Container }[];
 }
 
 export function buildToilet(def: RoomDef): Toilet {
@@ -338,12 +338,28 @@ export function buildToilet(def: RoomDef): Toilet {
     const open = new Graphics();
     P.panelV(open, STALL_D - 0.18, STALL_D, v0 + 0.03, 6, Hs, { fill: shade(panel, -0.15), line: 2.5 });
     const lamp = new Graphics();
-    const [lx, ly] = P.P(STALL_D, v1 - 0.06, Hs - 8);
+    const [lx, ly] = P.P(STALL_D, v1 - 0.07, Hs - 30);
     lamp.position.set(lx, ly);
-    c.addChild(closed, open, lamp);
+    // табличка CLOSED — прямоугольник + текст, позиционируем через P.P как дверь
+    const closedSign = new Container();
+    closedSign.skew.y = -0.5;
+    const signBg = new Graphics();
+    signBg.rect(-14, -4, 28, 8);
+    signBg.fillStyle = { color: 0xffffff, alpha: 0.9 };
+    signBg.fill();
+    signBg.strokeStyle = { color: 0x6b7280, width: 1 };
+    signBg.stroke();
+    closedSign.addChild(signBg);
+    // текст — рисуем вручную через линии (Pixi Graphics не поддерживает текст)
+    const signText = new Text('CLOSED', { fontSize: 6, fill: 0x6b7280, align: 'center', fontWeight: 'bold', fontFamily: 'system-ui' });
+    signText.anchor.set(0.5);
+    closedSign.addChild(signText);
+    const [sx, sy] = P.P(STALL_D, (v0 + v1) / 2, Hs - 17);
+    closedSign.position.set(sx, sy);
+    c.addChild(closed, open, lamp, closedSign);
     // верхняя планка
     line(g, [...P.P(STALL_D, v0, Hs + 4), ...P.P(STALL_D, v1, Hs + 4)], OUT, 3);
-    doors.push({ closed, open, lamp });
+    doors.push({ closed, open, lamp, closedSign });
     items.push(c);
   }
   // раковины на общей столешнице у стены v = 0 и зеркала над ними

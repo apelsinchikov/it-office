@@ -185,7 +185,7 @@ export class Hud {
 
   private onGame(e: GameEvent): void {
     // структура панели меняется — перестраиваем
-    if (['hire', 'unlock', 'manager', 'reorg', 'company', 'room'].includes(e.type) && this.sheet) this.rebuild();
+    if (['hire', 'unlock', 'manager', 'reorg', 'company', 'room', 'toiletStall'].includes(e.type) && this.sheet) this.rebuild();
   }
 
   setHidden(hidden: boolean): void {

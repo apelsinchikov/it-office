@@ -92,6 +92,13 @@ export const DIR_SINGLE_BONUS = 0.1;
 /** Туалет: открытый туалет — сотрудники меньше отвлекаются, +3% ко всему офису. */
 export const TOILET_BONUS = 0.03;
 
+/** Доп. кабинки туалета: cost[i] — множитель от базовой цены туалета для i-й кабинки (i=0 ignored, index 1..3).
+ *  bonus[i] — дополнительный бонус ко всему офису за каждую открытую кабинку. */
+export const TOILET_STALLS = {
+  cost: [0, 1.5, 2.5, 4] as const,
+  bonus: [0, 0.01, 0.01, 0.01] as const, // index 0 ignored (base TOILET_BONUS already covers it)
+};
+
 /** Гранты: floor(K · (заработок / DIV)^POW · (1 + 0.05 · лоббирование)); DIV и POW пересчитаны под новые числа. */
 export const GRANTS_K = 2;
 function grantsExp(): number {

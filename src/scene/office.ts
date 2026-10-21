@@ -383,6 +383,7 @@ export class OfficeView {
     this.world.addChild(this.floorText);
     this.buildStatic();
     this.walkers = new WalkerWorld(this.world, (a, b) => this.blocked(a, b), rng, (kind) => this.slotOpen(kind));
+    this.walkers.setStallOpen((i) => this.game.toiletStallOpen(i));
     this.walkers.onToilet = (stall, busy) => this.setStall(stall, busy);
     this.walkers.onFridge = (open) => this.setFridge(open);
     this.walkers.onCoffee = (n) => {
@@ -536,6 +537,8 @@ export class OfficeView {
     }
     this.stallBusy = this.toilet.doors.map((_, i) => this.stallBusy[i] ?? false);
     this.stallBusy.forEach((b, i) => this.setStall(i, b));
+    // инициализация видимости закрытых кабинок
+    for (let i = 0; i < 4; i++) this.setStallVisible(i, this.game.toiletStallOpen(i));
 
     // серверная у сисадминов: стойки, провода, роутер, принтер
     for (const c of this.serverItems) c.destroy({ children: true });
@@ -856,10 +859,47 @@ export class OfficeView {
     this.stallBusy[i] = busy;
     const d = this.toilet?.doors[i];
     if (!d) return;
+    // если кабинка закрыта — игнорим busy, оставляем дверь закрытой
+    if (!this.game.toiletStallOpen(i)) return;
     d.closed.visible = busy;
     d.open.visible = !busy;
-    d.lamp.clear();
-    circle(d.lamp, 0, 0, 3.5, busy ? 0xff2d3a : 0x3ccf63);
+    if (busy) {
+      d.lamp.clear();
+      circle(d.lamp, 0, 0, 3.5, 0xff2d3a);
+    } else {
+      // дверь открыта — лампу скрываем, зелёный огонёк не нужен
+      d.lamp.visible = false;
+    }
+  }
+
+  setStallVisible(i: number, open: boolean): void {
+    const d = this.toilet?.doors[i];
+    if (!d) return;
+    if (open) {
+      d.closed.visible = this.stallBusy[i];
+      d.open.visible = !this.stallBusy[i];
+      if (this.stallBusy[i]) {
+        d.lamp.visible = true;
+        d.lamp.clear();
+        circle(d.lamp, 0, 0, 3.5, 0xff2d3a);
+      } else {
+        // дверь открыта и никто не занят — лампу скрываем
+        d.lamp.visible = false;
+      }
+      d.closedSign.visible = false;
+    } else {
+      d.closed.visible = true;
+      d.open.visible = false;
+      d.lamp.visible = true;
+      d.lamp.clear();
+      circle(d.lamp, 0, 0, 3.5, 0xff2d3a); // красный — всегда закрыто
+      d.closedSign.visible = true;
+      this.stallBusy[i] = false; // сбросить busy для закрытых
+    }
+  }
+
+  syncToilet(): void {
+    for (let i = 0; i < 4; i++) this.setStallVisible(i, this.game.toiletStallOpen(i));
   }
 
   private dirSeat: Character | null = null;
@@ -1029,6 +1069,10 @@ export class OfficeView {
       case 'room':
       case 'reorg':
         this.syncRooms();
+        if (this.game.roomOpen('toilet')) this.syncToilet();
+        break;
+      case 'toiletStall':
+        this.syncToilet();
         break;
       case 'levels':
         this.syncHireMarks();

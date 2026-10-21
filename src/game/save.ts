@@ -8,6 +8,13 @@ const OLD_KEY = 'it-office.save.v1';
 const CHUNK = 3800;
 const META = 'save_meta';
 
+/** Блокируем все сейвы при активном чит-режиме на localhost. */
+function _isCheatActive(): boolean {
+  if (!location.search.includes('cheat')) return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h.startsWith('127.');
+}
+
 export function loadLocal(now = Date.now()): GameState {
   try {
     const raw = localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY);
@@ -19,6 +26,7 @@ export function loadLocal(now = Date.now()): GameState {
 }
 
 export function saveLocal(s: GameState): void {
+  if (_isCheatActive()) return;
   try {
     s.lastSeen = Date.now();
     localStorage.setItem(KEY, JSON.stringify(s));
@@ -69,7 +77,7 @@ let saving = false;
 
 export async function saveCloud(s: GameState): Promise<boolean> {
   const cs = cloud();
-  if (!cs || saving) return false;
+  if (!cs || saving || _isCheatActive()) return false;
   saving = true;
   try {
     const json = JSON.stringify(s);

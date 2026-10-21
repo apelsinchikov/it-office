@@ -496,8 +496,18 @@ export class WalkerWorld {
   }
 
   freeSlot(kinds: Slot['kind'][], rng: () => number): Slot | null {
-    const free = this.slots.filter((s) => kinds.includes(s.kind) && !s.by && this.slotOpen(s.kind));
+    const free = this.slots.filter((s) => kinds.includes(s.kind) && !s.by && this.slotOpen(s.kind) && (s.kind !== 'toilet' || s.index == null || this.stallOpen(s.index)));
     return free.length ? free[Math.floor(rng() * free.length)] : null;
+  }
+
+  /** Проверка: открыта ли конкретная кабинка туалета. */
+  stallOpen(i: number): boolean {
+    return this._stallOpen?.(i) ?? false;
+  }
+  private _stallOpen: ((i: number) => boolean) | null = null;
+
+  setStallOpen(fn: ((i: number) => boolean) | null): void {
+    this._stallOpen = fn;
   }
 
   /** Комната открылась или закрылась: новая сетка, а кто оказался в закрытом — выходит в ближайший проход. */

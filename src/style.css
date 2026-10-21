@@ -614,6 +614,30 @@ body.avral #game::after {
   transform: rotate(180deg);
 }
 
+/* кабинки туалета */
+.stall-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  margin-bottom: 4px;
+}
+
+.stall-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.stall-status {
+  font-size: 16px;
+  color: var(--green);
+  flex: none;
+}
+
 .furn {
   display: flex;
   flex-basis: 100%;

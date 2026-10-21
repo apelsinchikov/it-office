@@ -16,7 +16,6 @@ import {
   AVRAL_SEC,
   FURN_SINGLE_BONUS,
   GRANTS_MIN,
-  TOILET_BONUS,
   HIRE_GATES,
   MANAGER_BONUS,
   MANAGER_NEEDS_DESK,
@@ -24,6 +23,8 @@ import {
   PAYOUT_SEC,
   REST,
   REST_KINDS,
+  TOILET_BONUS,
+  TOILET_STALLS,
   TICKET_EVERY_MAX,
   TICKET_EVERY_MIN,
   TICKET_REWARD_SEC,
@@ -77,6 +78,7 @@ export type GameEvent =
   | { type: 'hire'; dept: number; desk: number }
   | { type: 'unlock'; dept: number }
   | { type: 'room'; id: RoomId }
+  | { type: 'toiletStall'; stall: number }
   | { type: 'manager'; dept: number }
   | { type: 'furn'; dept: number; desk: number }
   | { type: 'dirFurn' }
@@ -193,8 +195,38 @@ export class Game {
     const r = this.run.rest;
     let b = 0;
     if (this.run.rooms.rest) for (const kind of REST_KINDS) for (let i = 0; i < r[kind]; i++) b += REST[kind].bonus[i];
-    if (this.run.rooms.toilet) b += TOILET_BONUS;
+    if (this.run.rooms.toilet) {
+      b += TOILET_BONUS;
+      for (let i = 0; i < this.run.toilet.length; i++) {
+        if (this.run.toilet[i] > 0) b += TOILET_STALLS.bonus[i];
+      }
+    }
     return b;
+  }
+
+  toiletStallOpen(i: number): boolean {
+    return !!this.run.toilet[i];
+  }
+
+  toiletStallAvailable(i: number): boolean {
+    if (!this.run.rooms.toilet) return false;
+    if (this.run.toilet[i] > 0) return false;
+    if (i === 0) return this.run.toilet[0] === 0;
+    return this.run.toilet[i - 1] > 0;
+  }
+
+  toiletStallCost(i: number): number {
+    const mult = TOILET_STALLS.cost[i];
+    return roomUnlockCost('toilet') * mult * this.levelCostMult();
+  }
+
+  buyToiletStall(i: number): boolean {
+    if (!this.toiletStallAvailable(i)) return false;
+    const cost = this.toiletStallCost(i);
+    if (!this.pay(cost)) return false;
+    this.run.toilet[i] = 1;
+    this.emit({ type: 'toiletStall', stall: i });
+    return true;
   }
 
   payoutTime(d: number): number {
@@ -518,6 +550,10 @@ export class Game {
     if (!this.roomUnlockAvailable(id)) return false;
     if (!this.pay(this.roomCost(id))) return false;
     this.run.rooms[id] = true;
+    // инициализация кабинок при покупке туалета
+    if (id === 'toilet' && (!this.run.toilet || this.run.toilet[0] !== 1)) {
+      this.run.toilet = [1, 0, 0, 0];
+    }
     this.emit({ type: 'room', id });
     return true;
   }

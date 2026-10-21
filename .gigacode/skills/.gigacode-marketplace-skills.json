@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "skills": {
+    "bundled:using-agent-skills": {
+      "dirName": "using-agent-skills",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:frontend-design": {
+      "dirName": "frontend-design",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:repository-analyzer": {
+      "dirName": "repository-analyzer",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:deep-analysis": {
+      "dirName": "deep-analysis",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:code-reviewer": {
+      "dirName": "code-reviewer",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:prototype-generator": {
+      "dirName": "prototype-generator",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:debugging-assistant": {
+      "dirName": "debugging-assistant",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:discovery-process": {
+      "dirName": "discovery-process",
+      "marketplaceVersion": "0.1.0"
+    }
+  }
+}

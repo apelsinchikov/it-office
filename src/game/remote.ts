@@ -44,9 +44,16 @@ export async function loadRemote(): Promise<{ state: GameState | null; saveCreat
 
 let saving = false;
 
+/** Блокируем запись на сервер при активном чит-режиме (только localhost). */
+function _isCheatActive(): boolean {
+  if (!location.search.includes('cheat')) return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h.startsWith('127.');
+}
+
 /** Записать прогресс. force — после сброса, иначе сервер не примет сохранение «отсталее» своего. */
 export async function saveRemote(s: GameState, force = false): Promise<boolean> {
-  if (!remoteAvailable() || (saving && !force)) return false;
+  if (!remoteAvailable() || (saving && !force) || _isCheatActive()) return false;
   saving = true;
   try {
     s.lastSeen = Date.now();

@@ -4,7 +4,7 @@ import type { Purchase } from '../game/advisor';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { COMPANY_STYLES, DEPTS, DESKS, SEQUENCE, SHOP, companyDef, stepIndex, type RoomId, type Step } from '../game/config';
 import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, perkCashSec, perkDuration, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
-import { DIR_ITEMS, DIR_SINGLES, DIR_SINGLE_BONUS, DIR_TIER_BONUS, FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
+import { DIR_ITEMS, DIR_SINGLES, DIR_SINGLE_BONUS, DIR_TIER_BONUS, FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, TOILET_BONUS, TOILET_STALLS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
 import { formatNumber } from '../game/format';
 import { loadLeaderboard, remoteAvailable, type RatingRow } from '../game/remote';
 import type { Game } from '../game/game';
@@ -466,9 +466,90 @@ export function directorPanel(ctx: Ctx): Panel {
 }
 
 export function notePanel(ctx: Ctx, def: RoomDef): Panel {
-  if (def.kind === 'toilet' && !ctx.game.roomOpen('toilet')) return roomLockedPanel(ctx, 'toilet');
-  const key = def.kind === 'hall' ? 'hall.desc' : 'toilet.desc';
-  return { title: t(`room.${def.id}` as Key), body: h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t(key) })), refresh() {} };
+  if (def.kind === 'hall') {
+    const key = 'hall.desc';
+    return { title: t('room.hall' as Key), body: h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t(key) })), refresh() {} };
+  }
+  if (def.kind === 'toilet') return toiletPanel(ctx);
+  return roomLockedPanel(ctx, def.id as RoomId);
+}
+
+// ---------- туалет: кабинки ----------
+
+export function toiletPanel(ctx: Ctx): Panel {
+  const g = ctx.game;
+  if (!g.roomOpen('toilet')) return roomLockedPanel(ctx, 'toilet');
+  const body = h('div', { class: 'panel-body' });
+  const bonusEl = h('div', { class: 'stat' });
+  const refs: (() => void)[] = [];
+
+  // кабинки
+  const stallRows: HTMLDivElement[] = [h('div', { class: 'stall-row' })];
+  for (let i = 1; i < 4; i++) stallRows.push(h('div', { class: 'stall-row' }));
+  stallRows.forEach((r) => body.appendChild(r));
+  body.appendChild(bonusEl);
+
+  const stallNames = [t('room.stall.1'), t('room.stall.2'), t('room.stall.3'), t('room.stall.4')];
+
+  for (let i = 0; i < 4; i++) {
+    const row = i === 0 ? stallRows[0] : stallRows[i];
+    const open = g.toiletStallOpen(i);
+    const cost = i === 0 ? 0 : g.toiletStallCost(i);
+
+    const nameEl = h('span', { class: 'stall-name' });
+    row.appendChild(nameEl);
+
+    if (i > 0) {
+      const buy = () => g.buyToiletStall(i);
+      const btn = buyButton(buy, ctx);
+      row.appendChild(btn.el);
+      refs.push(() => {
+        if (open) btn.set({ label: t('room.stall.opened'), enabled: false, done: true });
+        else btn.set({ label: fmt(cost), cost: fmt(cost), enabled: g.canAfford(cost), best: false });
+      });
+    }
+
+    const statusEl = h('span', { class: 'stall-status' });
+    nameEl.appendChild(statusEl);
+
+    refs.push(() => {
+      if (open) {
+        nameEl.textContent = stallNames[i];
+        statusEl.textContent = '✓';
+        if (i > 0) {
+          const b = row.querySelector('button');
+          if (b) b.remove();
+        }
+      } else {
+        nameEl.textContent = stallNames[i];
+        statusEl.textContent = '';
+        if (i > 0) {
+          const b = row.querySelector('button');
+          if (!b) {
+            const buy = () => g.buyToiletStall(i);
+            const btn = buyButton(buy, ctx);
+            row.appendChild(btn.el);
+          }
+        }
+      }
+    });
+  }
+
+  // базовое описание
+  body.prepend(h('p', { class: 'note', text: t('toilet.desc') }));
+
+  return {
+    title: t('room.toilet'),
+    body,
+    refresh() {
+      // обновить цены и доступность кнопок
+      refs.forEach((f) => f());
+      // показать суммарный бонус
+      let totalBonus = TOILET_BONUS;
+      for (let i = 0; i < 4; i++) if (g.toiletStallOpen(i)) totalBonus += TOILET_STALLS.bonus[i];
+      bonusEl.textContent = `+${Math.round(totalBonus * 100)}% ${t('toilet.bonus')}`;
+    },
+  };
 }
 
 // ---------- Гранты ----------

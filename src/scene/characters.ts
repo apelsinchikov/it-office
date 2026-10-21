@@ -665,6 +665,9 @@ export class Character {
     this.front = buildFront(look, !seated);
     this.root.addChild(this.front.view);
     if (seated) this.mode = 'sit';
+    // z-слой поверх всего для предметов в руках
+    this.zLayer = new Container();
+    this.root.addChild(this.zLayer);
   }
 
   setDir(dir: Dir): void {
@@ -674,6 +677,15 @@ export class Character {
     if (backView && !this.back) {
       this.back = buildBack(this.look);
       this.root.addChild(this.back.view);
+      // джойстик — в обе стороны: и front.padG, и back.padBG для обоих направлений
+      if (this.padG) {
+        const g = new Graphics();
+        rect(g, 44, 140, 32, 13, 6, 0x2f3344);
+        circle(g, 52, 146, 2.5, { fill: 0x4fb3ff, line: 0 });
+        circle(g, 68, 146, 2.5, { fill: 0xe8173a, line: 0 });
+        this.back.bob.addChild(g);
+        this.padBG = g;
+      }
     }
     this.front.view.visible = !backView;
     if (this.back) this.back.view.visible = backView;
@@ -690,6 +702,10 @@ export class Character {
   private mugC: Container | null = null;
   private armIdx = -1;
   private padG: Graphics | null = null;
+  /** Отдельный геймпад для вида сзади. */
+  private padBG: Graphics | null = null;
+  /** Зона поверх всего: джойстик, чтобы не перекрывался руками. */
+  private zLayer: Container | null = null;
 
   /** Что в руках: кружка (пьёт кофе), геймпад (играет) или ничего. */
   hold(prop: 'mug' | 'pad' | null): void {
@@ -712,15 +728,34 @@ export class Character {
       circle(g, 68, 146, 2.5, { fill: 0xe8173a, line: 0 });
       this.front.bob.addChild(g);
       this.padG = g;
+      // если back уже есть — дублируем геймпад и в него
+      let g2: Graphics | null = null;
+      if (this.back) {
+        g2 = new Graphics();
+        rect(g2, 44, 140, 32, 13, 6, 0x2f3344);
+        circle(g2, 52, 146, 2.5, { fill: 0x4fb3ff, line: 0 });
+        circle(g2, 68, 146, 2.5, { fill: 0xe8173a, line: 0 });
+        this.back.bob.addChild(g2);
+        this.padBG = g2;
+      }
+      // переносим джойстик в конец bob (поверх рук)
+      this.front.bob.removeChild(g);
+      this.front.bob.addChild(g);
+      if (g2) {
+        this.back!.bob.removeChild(g2);
+        this.back!.bob.addChild(g2);
+      }
     }
     if (this.mugC) this.mugC.visible = prop === 'mug';
     if (this.padG) this.padG.visible = prop === 'pad';
+    if (this.padBG) this.padBG.visible = prop === 'pad';
     const bob = this.front.bob;
     const arm = this.front.armR;
     if (this.armIdx < 0) this.armIdx = bob.getChildIndex(arm);
     bob.removeChild(arm);
     // с кружкой рука поверх головы: кружка подносится ко рту перед лицом, а не за затылком
-    if (prop === 'mug') bob.addChild(arm);
+    // с геймпадом — правая рука тоже вперёд, чтобы не пряталась за торсом
+    if (prop === 'mug' || prop === 'pad') bob.addChild(arm);
     else bob.addChildAt(arm, Math.min(this.armIdx, bob.children.length));
   }
 
@@ -800,10 +835,24 @@ export class Character {
         r.head.rotation = -6 * DEG * sip;
         if (this.mugC) this.mugC.rotation = -r.armR.rotation + 0.35 * sip;
       } else if (this.mode === 'game') {
-        // жмёт кнопки геймпада
+        // держит геймпад: руки согнуты к центру, палец жмёт
         this.phase += dt * 9 * this.speed;
-        r.armR.rotation = 0.95 + 0.07 * Math.sin(this.phase);
-        r.armL.rotation = -0.95 - 0.07 * Math.sin(this.phase * 1.3);
+        // левая рука тоже вперёд (поверх торса) — для вида спереди и сзади
+        const bob = r.bob;
+        bob.removeChild(r.armL);
+        bob.addChild(r.armL);
+        // джойстик поверх рук: перемещаем в самый конец bob
+        if (r === this.front && this.padG && this.padG.parent === bob) {
+          bob.removeChild(this.padG);
+          bob.addChild(this.padG);
+        }
+        if (r === this.back && this.padBG && this.padBG.parent === bob) {
+          bob.removeChild(this.padBG);
+          bob.addChild(this.padBG);
+        }
+        // ±0.4 — руки направлены к центру (джойстик на уровне груди), микровибрация для анимации нажатия
+        r.armR.rotation = 0.4 + 0.03 * Math.sin(this.phase);
+        r.armL.rotation = -0.4 - 0.03 * Math.sin(this.phase * 1.3);
         r.head.rotation = 2 * DEG * Math.sin(this.phase * 0.2);
       } else if (this.mode === 'talk') {
         this.phase += dt * 10;

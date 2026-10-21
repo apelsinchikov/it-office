@@ -1,7 +1,7 @@
 // Список покупок с окупаемостью: для подсветки «выгодно» в интерфейсе и для симуляции игроков.
 
 import { DEPTS, DEPT_COUNT, DESKS, ROOM_IDS, type RoomId } from './config';
-import { AVRAL_COOLDOWN, AVRAL_MULT, AVRAL_SEC, FURN_SINGLE_BONUS, FURN_TIER_BONUS, MANAGER_BONUS, REST, REST_KINDS, TOILET_BONUS, nextMilestone, payoutIncome, type RestKind } from './economy';
+import { AVRAL_COOLDOWN, AVRAL_MULT, AVRAL_SEC, FURN_SINGLE_BONUS, FURN_TIER_BONUS, MANAGER_BONUS, REST, REST_KINDS, TOILET_BONUS, TOILET_STALLS, nextMilestone, payoutIncome, type RestKind } from './economy';
 import type { Game } from './game';
 
 export type Purchase =
@@ -12,7 +12,8 @@ export type Purchase =
   | { kind: 'furn'; d: number; k: number; i: number; cost: number; gain: number }
   | { kind: 'single'; d: number; k: number; j: number; cost: number; gain: number }
   | { kind: 'rest'; rest: RestKind; cost: number; gain: number }
-  | { kind: 'room'; id: RoomId; cost: number; gain: number };
+  | { kind: 'room'; id: RoomId; cost: number; gain: number }
+  | { kind: 'toiletStall'; stall: number; cost: number; gain: number };
 
 /**
  * Все доступные сейчас покупки (по деньгам — любые) с приростом дохода в секунду.
@@ -75,6 +76,15 @@ export function purchases(g: Game, maxChunk = 25): Purchase[] {
       out.push({ kind: 'rest', rest: kind, cost: g.restCost(kind), gain: (total * REST[kind].bonus[lvl]) / (1 + g.restBonus()) });
     }
   }
+  // кабинки туалета
+  if (run.rooms.toilet) {
+    for (let i = 0; i < 4; i++) {
+      if (g.toiletStallAvailable(i)) {
+        const cost = g.toiletStallCost(i);
+        out.push({ kind: 'toiletStall', stall: i, cost, gain: (total * TOILET_STALLS.bonus[i]) / (1 + g.restBonus()) });
+      }
+    }
+  }
   return out;
 }
 
@@ -114,5 +124,7 @@ export function apply(g: Game, p: Purchase): boolean {
       return g.buyRest(p.rest);
     case 'room':
       return g.unlockRoom(p.id);
+    case 'toiletStall':
+      return g.buyToiletStall(p.stall);
   }
 }

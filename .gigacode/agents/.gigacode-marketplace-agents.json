@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "agents": {
+    "bundled:backend-engineer": {
+      "fileName": "backend-engineer.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:frontend-engineer": {
+      "fileName": "frontend-engineer.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:product-designer": {
+      "fileName": "product-designer.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:devops-engineer": {
+      "fileName": "devops-engineer.md",
+      "marketplaceVersion": "0.1.0"
+    }
+  }
+}

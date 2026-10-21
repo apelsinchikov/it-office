@@ -51,6 +51,8 @@ export interface RunState {
   rest: { coffee: number; fridge: number; games: number };
   /** Открыты ли кабинет директора, зона отдыха и туалет. */
   rooms: { director: boolean; rest: boolean; toilet: boolean };
+  /** Уровни открытых кабинок туалета: 0 = закрыта, 1 = открыта. Длина 4, порядок слева направо. */
+  toilet: number[];
   /** Кабинет директора: уровни стола, стула, монитора, клавиатуры (0..3) и украшения. */
   dir: DirFurn;
 }
@@ -114,6 +116,7 @@ export function newRun(startCoins = 0): RunState {
     singles: DEPTS.map((def) => Array.from({ length: DESKS }, () => def.singles.map(() => false))),
     rest: { coffee: 0, fridge: 0, games: 0 },
     rooms: { director: false, rest: false, toilet: false },
+    toilet: [0, 0, 0, 0],
     dir: newDirFurn(),
   };
 }
@@ -200,6 +203,9 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
       rest: Boolean(run.rooms?.rest),
       toilet: Boolean(run.rooms?.toilet),
     },
+    toilet: run.toilet
+      ? (run.toilet as number[]).slice()
+      : run.rooms?.toilet ? [1, 0, 0, 0] : [0, 0, 0, 0],
     dir: {
       desk: Math.min(3, Math.max(0, Math.floor(num(run.dir?.desk)))),
       chair: Math.min(3, Math.max(0, Math.floor(num(run.dir?.chair)))),

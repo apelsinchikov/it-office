@@ -350,6 +350,14 @@ async function start(): Promise<void> {
       __lab: { PIXI, app, draw: drawM, furniture: furnitureM, characters: charactersM, camera },
     });
 
+  // ?cheat — много денег для отладки (только локальный хост, блокирует запись в облако)
+  function _isLocalHost(): boolean {
+    const h = location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || h.startsWith('127.');
+  }
+  const CHEAT_ENABLED = _isLocalHost() && location.search.includes('cheat');
+  if (CHEAT_ENABLED) game.state.run.coins = 999_000_000_000_000_000;
+
   // офлайн-доход
   const offerOffline = (sec: number): void => {
     if (sec < OFFLINE_MIN_SEC) return;

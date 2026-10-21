@@ -19,7 +19,9 @@
       "Bash(git reflog *)",
       "Bash(git *)",
       "Bash(curl *)",
-      "Bash(rm *)"
+      "Bash(rm *)",
+      "Bash(npm test)",
+      "Bash(git commit *)"
     ]
   },
   "$version": 3
