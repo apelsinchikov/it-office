@@ -259,10 +259,10 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
 
   // невысокое растение у внутренней стены — его высоты не хватит, чтобы кого-то закрыть
   {
-    const { c, g } = item(P.z(0.15, 0.93));
-    P.shadow(g, 0.04, 0.14, 0.82, 0.92);
-    P.box(g, 0.05, 0.13, 0.83, 0.91, 0, 13, 0xff7a45, 0xe0662f, 0xc9561f, 2);
-    const [x, y] = P.P(0.09, 0.87, 13);
+    const { c, g } = item(P.z(0.09, 0.65));
+    P.shadow(g, 0.04, 0.14, 0.6, 0.7);
+    P.box(g, 0.05, 0.13, 0.6, 0.7, 0, 13, 0xff7a45, 0xe0662f, 0xc9561f, 2);
+    const [x, y] = P.P(0.09, 0.65, 13);
     for (const [dx, dy, r] of [
       [-6, -8, 7],
       [6, -9, 7],
