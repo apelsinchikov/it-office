@@ -52,7 +52,7 @@ function _isCheatActive(): boolean {
 }
 
 /** Записать прогресс. force — после сброса, иначе сервер не примет сохранение «отсталее» своего. */
-export async function saveRemote(s: GameState, force = false): Promise<boolean> {
+export async function saveRemote(s: GameState, force = false, companyProgress = 0): Promise<boolean> {
   if (!remoteAvailable() || (saving && !force) || _isCheatActive()) return false;
   saving = true;
   try {
@@ -61,6 +61,8 @@ export async function saveRemote(s: GameState, force = false): Promise<boolean> 
       action: 'save',
       state: s,
       company_no: s.company,
+      company_progress: companyProgress,
+      company_reorgs: s.companyReorgs,
       lifetime: Number.isFinite(s.totalEarned) ? s.totalEarned : 0,
       score: progressScore(s),
       save_created_at: Math.floor(s.createdAt),

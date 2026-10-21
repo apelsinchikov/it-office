@@ -31,9 +31,9 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { action, telegram_id, state, company_no, lifetime, score, save_created_at, force, p_limit } = body
+    const { action, telegram_id, state, company_no, company_progress, company_reorgs, lifetime, score, save_created_at, force, p_limit } = body
 
-    console.log('progress:', JSON.stringify({ action, telegram_id }))
+    console.log('progress:', JSON.stringify({ action, telegram_id, company_progress, company_reorgs }))
 
     const supabase = createClient(url, key('secret'), { auth: { persistSession: false, autoRefreshToken: false } })
 
@@ -49,6 +49,8 @@ Deno.serve(async (req) => {
         p_telegram_id: telegram_id,
         p_state: state,
         p_company_no: company_no,
+        p_company_progress: company_progress || 0,
+        p_company_reorgs: company_reorgs || 0,
         p_lifetime: lifetime,
         p_score: score,
         p_save_created_at: save_created_at || Date.now(),

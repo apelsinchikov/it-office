@@ -853,7 +853,7 @@ function ratingRow(r: RatingRow): HTMLElement {
 }
 
 export function ratingPanel(ctx: Ctx): Panel {
-  const g = ctx.game;
+  void ctx;
   const body = h('div', { class: 'panel-body' });
   const list = h('div', { class: 'rating-list' });
   body.append(h('p', { class: 'note small', text: t('rating.note') }), list);
@@ -862,11 +862,6 @@ export function ratingPanel(ctx: Ctx): Panel {
     list.append(h('p', { class: 'note', text: t('rating.loading') }));
     loadLeaderboard(100)
       .then(({ top, me }) => {
-        // всегда заполняем локальный прогресс для текущего игрока
-        if (me) {
-          me.companyProgress = Math.floor(g.completion() * 100);
-          me.companyReorgs = g.state.companyReorgs;
-        }
         list.replaceChildren();
         if (!top.length) list.append(h('p', { class: 'note', text: t('rating.empty') }));
         for (const r of top) list.append(ratingRow(r));

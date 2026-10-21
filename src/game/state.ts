@@ -263,3 +263,31 @@ export function normalize(raw: unknown, now = Date.now()): GameState | null {
 export function progressScore(s: GameState): number {
   return s.company * 1e6 + s.reorgs * 1e3 + Math.log10(1 + s.totalEarned);
 }
+
+/** Сколько процентов офиса выкуплено (0..1). Вычисляется из RunState. */
+export function completionFromState(run: RunState): number {
+  let have = 0;
+  let total = 0;
+  for (let d = 0; d < DEPT_COUNT; d++) {
+    total += 2;
+    if (run.depts[d]) have++;
+    if (run.managers[d]) have++;
+    for (let k = 0; k < DESKS; k++) {
+      total += 1 + run.furn[d][k].length * 3 + run.singles[d][k].length;
+      if (run.levels[d][k] > 0) have++;
+      for (const t of run.furn[d][k]) have += t;
+      for (const x of run.singles[d][k]) if (x) have++;
+    }
+  }
+  // 3 комнаты: director, rest, toilet
+  total += 3;
+  if (run.rooms.director) have++;
+  if (run.rooms.rest) have++;
+  if (run.rooms.toilet) have++;
+  // rest: coffee(3), fridge(3), games(10) = 16 total
+  total += 16;
+  have += run.rest.coffee;
+  have += run.rest.fridge;
+  have += run.rest.games;
+  return have / total || 0;
+}
