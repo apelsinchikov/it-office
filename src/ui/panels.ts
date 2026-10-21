@@ -862,16 +862,16 @@ export function ratingPanel(ctx: Ctx): Panel {
     list.append(h('p', { class: 'note', text: t('rating.loading') }));
     loadLeaderboard(100)
       .then(({ top, me }) => {
+        // всегда заполняем локальный прогресс для текущего игрока
+        if (me) {
+          me.companyProgress = Math.floor(g.completion() * 100);
+          me.companyReorgs = g.state.companyReorgs;
+        }
         list.replaceChildren();
         if (!top.length) list.append(h('p', { class: 'note', text: t('rating.empty') }));
         for (const r of top) list.append(ratingRow(r));
         // игрок не в первой сотне — его строка отдельно внизу
-        if (me && !top.some((r) => r.me)) {
-          // добавляем локальный прогресс для игрока
-          me.companyProgress = Math.floor(g.completion() * 100);
-          me.companyReorgs = g.state.companyReorgs;
-          list.append(h('div', { class: 'rating-gap', text: '…' }), ratingRow(me));
-        }
+        if (me && !top.some((r) => r.me)) list.append(h('div', { class: 'rating-gap', text: '…' }), ratingRow(me));
       })
       .catch(() => list.replaceChildren(h('p', { class: 'note', text: t('rating.error') })));
   }
