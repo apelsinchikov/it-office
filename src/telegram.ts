@@ -51,8 +51,25 @@ export function onTelegramLayout(cb: () => void): void {
 }
 
 /**
+ * Подписаться на получение initData от Telegram SDK.
+ * На некоторых клиентах (особенно iOS) initDataUnsafe не заполняется синхронно —
+ * SDK отправляет событие initDataUpdated, когда данные станут доступны.
+ */
+export function subscribeInitData(cb: (user: TgUser) => void): void {
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.onEvent) return;
+  // initDataUpdated — стандартное событие Telegram Bot API 7.2+
+  // Срабатывает, когда initData/initDataUnsafe заполнены.
+  tg.onEvent('initDataUpdated', () => {
+    const user = tg?.initDataUnsafe?.user;
+    if (user) cb(user);
+  });
+}
+
+/**
  * Подождать появления tg.initDataUnsafe.user с таймаутом.
  * На десктопе Telegram SDK может подгрузить user через 100-500мс.
+ * Если initDataUpdated не сработал — fallback на polling.
  */
 export async function waitForUser(
   tg: TelegramInfo,
@@ -62,13 +79,40 @@ export async function waitForUser(
 
   return new Promise((resolve) => {
     const start = Date.now();
+
+    // Подписываемся на событие от Telegram SDK — сработает, когда initData появится
+    const unsubscribe = () => {
+      resolve(user);
+      pollingDone = true;
+    };
+
+    let user = tg.initDataUnsafe?.user;
+    let pollingDone = false;
+
+    if (user) return resolve(user);
+
+    // Основной путь: событие initDataUpdated
+    const tgWebApp = window.Telegram?.WebApp;
+    if (tgWebApp?.onEvent) {
+      tgWebApp.onEvent('initDataUpdated', () => {
+        const u = tgWebApp.initDataUnsafe?.user;
+        if (u && !pollingDone) unsubscribe();
+      });
+    }
+
+    // Fallback: polling каждые 500мс — на случай если событие не придёт
     const check = () => {
-      if (tg.initDataUnsafe?.user) {
-        resolve(tg.initDataUnsafe.user);
+      if (pollingDone) return;
+      const u = tg.initDataUnsafe?.user;
+      if (u) {
+        user = u;
+        resolve(u);
+        pollingDone = true;
       } else if (Date.now() - start > timeout) {
         resolve(undefined);
+        pollingDone = true;
       } else {
-        setTimeout(check, 200);
+        setTimeout(check, 500);
       }
     };
     check();
