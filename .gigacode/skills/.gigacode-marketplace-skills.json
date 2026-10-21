@@ -32,6 +32,10 @@
     "bundled:discovery-process": {
       "dirName": "discovery-process",
       "marketplaceVersion": "0.1.0"
+    },
+    "bundled:product-brainstorming": {
+      "dirName": "product-brainstorming",
+      "marketplaceVersion": "0.1.0"
     }
   }
 }

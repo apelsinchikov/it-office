@@ -16,6 +16,22 @@
     "bundled:devops-engineer": {
       "fileName": "devops-engineer.md",
       "marketplaceVersion": "0.1.0"
+    },
+    "bundled:qa-engineer": {
+      "fileName": "qa-engineer.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:system-analyst": {
+      "fileName": "system-analyst.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:tech-lead": {
+      "fileName": "tech-lead.md",
+      "marketplaceVersion": "0.1.0"
+    },
+    "bundled:user-researcher": {
+      "fileName": "user-researcher.md",
+      "marketplaceVersion": "0.1.0"
     }
   }
 }
