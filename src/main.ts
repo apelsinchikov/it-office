@@ -293,6 +293,7 @@ async function start(): Promise<void> {
     unlockAudio();
     if (notes?.handleTap(x, y)) return;
     if (tutorial.active) return;
+    if (hud.isOpen()) return;
     const local = office.container.toLocal({ x, y });
     const def = office.roomAt(local.x, local.y);
     if (!def) {
