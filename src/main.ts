@@ -11,7 +11,7 @@ import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
 import { loadRemote, saveRemote, setRemoteAuth } from './game/remote';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
-import { newState, type GameState } from './game/state';
+import { newState, normalize, type GameState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import * as charactersM from './scene/characters';
@@ -83,15 +83,20 @@ async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<Preloa
 
   const best = better(better(state, fresh(cloudResult)), fresh(remoteResult.state));
 
-  if (best !== state) {
-    saveLocal(best);
+  // нормализация финального состояния — если normalize не сработал для cloud/remote
+  const bestNormalized = normalize(best) ?? best;
+  // восстанавливаем оригинальный lastSeen (normalize сбрасывает)
+  bestNormalized.lastSeen = best.lastSeen;
+
+  if (bestNormalized !== state) {
+    saveLocal(bestNormalized);
     const remoteOk = fresh(remoteResult.state);
     const remoteStale = !!remoteResult.state && !remoteOk;
-    await Promise.all([saveCloud(best), saveRemote(best, remoteStale)]);
+    await Promise.all([saveCloud(bestNormalized), saveRemote(bestNormalized, remoteStale)]);
   } else {
     // данные совпали — отправляем локальный прогресс в Supabase
     if (telegram_id > 0 && !remoteResult.failed) {
-      void saveRemote(best, wasReset);
+      void saveRemote(bestNormalized, wasReset);
     }
   }
 
