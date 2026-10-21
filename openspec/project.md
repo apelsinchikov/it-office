@@ -22,9 +22,9 @@ TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс пове
 | `src/game/economy.ts` | формулы и константы экономики, `TUNING` | economy |
 | `src/game/config.ts` | отделы, мебель, порядок открытия `SEQUENCE`, компании, магазин Грантов | progression, meta |
 | `src/game/game.ts` | класс `Game`: состояние забега, покупки, тики, события `GameEvent` | все игровые |
-| `src/game/state.ts` | схема сохранения v3, `newState`, `normalize` (миграции v1/v2) | saves |
+| `src/game/state.ts` | схема сохранения v3, `newState`, `normalize` (миграции v1/v2), `completionFromState()`, `progressScore()` | saves |
 | `src/game/save.ts` | localStorage + Telegram CloudStorage | saves |
-| `src/game/remote.ts`, `supabase/migrations/` | Supabase: прогресс и рейтинг (RPC с проверкой initData) | saves, hud |
+| `src/game/remote.ts`, `supabase/migrations/` | Supabase: прогресс и рейтинг (RPC с проверкой initData, `company_progress`, `company_reorgs`) | saves, hud |
 | `src/game/resets.ts`, `public/resets.json`, `scripts/reset-player.mjs` | сброс отдельного игрока по списку | saves |
 | `src/game/director.ts` | задания директора IT, перки, инвентарь | director |
 | `src/game/advisor.ts` | «Быстрее окупится»: лучшая покупка по окупаемости | hud |
