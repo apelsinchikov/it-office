@@ -23,6 +23,9 @@ import {
   type Panel,
 } from './panels';
 
+/** Сколько миллисекунд после открытия панели клики в ней не считаются. */
+const GHOST_CLICK_MS = 450;
+
 export type Sheet =
   | { kind: 'room'; def: RoomDef }
   | { kind: 'grants' }
@@ -56,6 +59,8 @@ export class Hud {
   private topEl: HTMLElement | null = null;
   /** Последнее записанное значение кольца «Аврала». */
   private avralP = '';
+  /** Когда открыта панель (для защиты от «призрачного» клика). */
+  private openedAt = 0;
   private readonly root: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly rate: HTMLElement;
@@ -132,6 +137,19 @@ export class Hud {
       { class: 'sheet hidden', attrs: { 'aria-live': 'polite' } },
       h('div', { class: 'sheet-head' }, h('div', { class: 'sheet-titles' }, this.sheetTitle, this.sheetSub), sheetMoney, close),
       this.sheetBody,
+    );
+    // «Призрачный» клик: на телефоне панель открывается по отпусканию пальца, а клик, который браузер
+    // присылает следом, попадал в кнопку покупки, оказавшуюся под пальцем. Первые мгновения после открытия
+    // клики внутри панели гасим.
+    this.sheetEl.addEventListener(
+      'click',
+      (e) => {
+        if (performance.now() - this.openedAt < GHOST_CLICK_MS) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      true,
     );
 
     // меню
@@ -236,6 +254,7 @@ export class Hud {
   }
 
   open(s: Sheet): void {
+    this.openedAt = performance.now();
     this.sheet = s;
     this.rebuild();
     this.sheetEl.classList.remove('hidden');

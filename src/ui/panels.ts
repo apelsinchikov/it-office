@@ -677,6 +677,17 @@ export function grantsPanel(ctx: Ctx): Panel {
 
 // ---------- задания ----------
 
+/** Кнопка награды: «Забрать» над суммой в две строки — так она не шире суммы и не наезжает на название и полосу. */
+function setClaim(btn: HTMLElement, ready: boolean, reward: string): void {
+  const key = `${ready ? 1 : 0}|${reward}|${getLang()}`;
+  if (btn.dataset.claim === key) return;
+  btn.dataset.claim = key;
+  btn.replaceChildren(
+    ...(ready ? [h('span', { class: 'b-label', text: t('claim') })] : []),
+    h('span', { class: 'b-cost', text: reward }),
+  );
+}
+
 export function questsPanel(ctx: Ctx): Panel {
   const g = ctx.game;
   const body = h('div', { class: 'panel-body' });
@@ -703,9 +714,10 @@ export function questsPanel(ctx: Ctx): Panel {
       (bar.firstChild as HTMLElement).style.width = `${Math.min(100, (prog / q.target) * 100)}%`;
       if (q.claimed) {
         btn.textContent = '✓';
+        delete btn.dataset.claim;
         btn.disabled = true;
       } else {
-        btn.textContent = prog >= q.target ? `${t('claim')} +${fmt(dailyReward(g))}` : `+${fmt(dailyReward(g))}`;
+        setClaim(btn, prog >= q.target, `+${fmt(dailyReward(g))}`);
         btn.disabled = prog < q.target;
       }
     });
@@ -729,12 +741,13 @@ export function questsPanel(ctx: Ctx): Panel {
     if (!c) {
       cTitle.textContent = t('quests.chainDone');
       cBtn.textContent = '✓';
+      delete cBtn.dataset.claim;
       cBtn.disabled = true;
       return;
     }
     cTitle.textContent = tr(c.title);
     const ok = c.check(g);
-    cBtn.textContent = ok ? `${t('claim')} +${fmt(chainReward(g))}` : `+${fmt(chainReward(g))}`;
+    setClaim(cBtn, ok, `+${fmt(chainReward(g))}`);
     cBtn.disabled = !ok;
   });
 

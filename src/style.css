@@ -1605,11 +1605,12 @@ body.avral #game::after {
   display: none;
 }
 
-.bar {
+/* полоса загрузки — только на экране загрузки, иначе ломала ширину полос прогресса в заданиях */
+#loader .bar {
   width: min(280px, 70vw);
 }
 
-.bar .fill {
+#loader .bar .fill {
   height: 100%;
   width: 0%;
   background: var(--green);
