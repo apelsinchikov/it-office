@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'save') {
-      const success = await supabase.rpc('ef_save_progress', {
+      const { data, error } = await supabase.rpc('ef_save_progress', {
         p_telegram_id: telegram_id,
         p_state: state,
         p_company_no: company_no,
@@ -56,8 +56,9 @@ Deno.serve(async (req) => {
         p_save_created_at: save_created_at || Date.now(),
         p_force: force || false,
       })
-      if (success === false) return new Response(JSON.stringify({ success: false, reason: 'stale' }), { headers })
-      return new Response(JSON.stringify({ success: !!success }), { headers })
+      if (error) return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers })
+      if (data === false) return new Response(JSON.stringify({ success: false, reason: 'stale' }), { headers })
+      return new Response(JSON.stringify({ success: !!data }), { headers })
     }
 
     if (action === 'leaderboard') {
