@@ -403,6 +403,8 @@ async function start(): Promise<void> {
 
   // старт: обучение или поддержка крупным планом
   focusRoom(roomById('sysadmins'), true);
+  // в режиме отладки обучение не показываем (его прохождение там всё равно не сохранилось бы)
+  if (DEBUG) game.state.tutorialDone = true;
   if (!game.state.tutorialDone) tutorial.start();
   // Используем originalLastSeen из локального сохранения, а не синхронизированный —
   // иначе offerOffline считает "0 секунд" когда Supabase хранит свежий lastSeen
