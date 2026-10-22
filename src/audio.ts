@@ -1,4 +1,11 @@
-// Звуки синтезируются WebAudio — без файлов.
+// Звуки синтезируются WebAudio — без файлов. Вместе со звуком — вибрация Telegram (своя настройка).
+//
+// iPhone: звук разрешается только касанием, которое Safari считает «действием пользователя» — это отпускание
+// пальца (touchend / pointerup / click), а не pointerdown. После сворачивания iOS переводит звук
+// в состояние «interrupted», его тоже нужно будить. В беззвучном режиме (переключатель на корпусе) iOS
+// звук страниц глушит — это поведение самого телефона.
+
+import { haptic, type Haptic } from './haptics';
 
 type Sfx = 'buy' | 'coin' | 'ticket' | 'avral' | 'reorg' | 'achieve' | 'click' | 'error' | 'hire';
 
@@ -13,7 +20,8 @@ export function setSound(on: boolean): void {
 /** Браузеры разрешают звук только после касания — вызываем на первом pointerdown. */
 export function unlockAudio(): void {
   if (ctx) {
-    if (ctx.state === 'suspended') void ctx.resume();
+    // suspended — ещё не разрешён; interrupted — iOS после сворачивания или звонка
+    if (ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => {});
     return;
   }
   try {
@@ -23,10 +31,30 @@ export function unlockAudio(): void {
     master = ctx.createGain();
     master.gain.value = 0.18;
     master.connect(ctx.destination);
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
   } catch {
     ctx = null;
   }
 }
+
+/** Слушать касания, которые разрешают звук: отпускание пальца и клик (iOS), нажатие (компьютер). */
+export function installAudioUnlock(): void {
+  for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+    window.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+  }
+}
+
+/** Вибрация к звукам: только к заметным событиям, не к каждому нажатию. */
+const HAPTIC: Partial<Record<Sfx, Haptic>> = {
+  buy: 'light',
+  hire: 'medium',
+  coin: 'light',
+  ticket: 'medium',
+  avral: 'heavy',
+  reorg: 'success',
+  achieve: 'success',
+  error: 'error',
+};
 
 function tone(freq: number, start: number, dur: number, type: OscillatorType = 'sine', vol = 1, slideTo?: number): void {
   if (!ctx || !master) return;
@@ -46,6 +74,8 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = '
 }
 
 export function play(s: Sfx): void {
+  const hk = HAPTIC[s];
+  if (hk) haptic(hk);
   if (!enabled || !ctx) return;
   switch (s) {
     case 'click':

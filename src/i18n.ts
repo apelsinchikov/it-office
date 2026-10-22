@@ -218,6 +218,8 @@ const D = {
   'col.unknownRare': ['??? редкая, ещё не звучала', '??? rare, not heard yet'],
   // настройки
   'set.sound': ['Звук', 'Sound'],
+  'set.haptics': ['Вибрация', 'Vibration'],
+  'set.soundHint': ['На iPhone звук не слышен в беззвучном режиме (переключатель на корпусе).', 'On iPhone the sound is muted in silent mode (the switch on the side).'],
   'set.lang': ['Язык', 'Language'],
   'set.tutorial': ['Пересмотреть обучение', 'Replay tutorial'],
   'set.reset': ['Сбросить прогресс', 'Reset progress'],

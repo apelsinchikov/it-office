@@ -25,6 +25,12 @@ interface TgWebApp {
   requestFullscreen?(): void;
   isFullscreen?: boolean;
   onEvent?(event: string, cb: () => void): void;
+  /** Bot API 6.1+: вибрация. */
+  HapticFeedback?: {
+    impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
+    notificationOccurred(type: 'error' | 'success' | 'warning'): void;
+    selectionChanged(): void;
+  };
   /** Bot API 8.0+: false, когда Mini App свёрнуто или закрыто другой вкладкой Telegram. */
   isActive?: boolean;
 }

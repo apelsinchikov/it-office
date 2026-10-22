@@ -1,7 +1,8 @@
 import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './style.css';
-import { play, setSound, unlockAudio } from './audio';
+import { installAudioUnlock, play, setSound, unlockAudio } from './audio';
+import { haptic, setHaptics } from './haptics';
 import { checkAchievements, ACHIEVEMENTS } from './game/achievements';
 import { companyDef } from './game/config';
 import { directorTick } from './game/director';
@@ -109,6 +110,7 @@ async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<Preloa
   // 6. Язык и звук
   setLang(state.settings.lang ?? detectLang(user?.language_code));
   setSound(state.settings.sound);
+  setHaptics(state.settings.haptics !== false);
 
   return { state: best, originalLastSeen };
 }
@@ -219,6 +221,11 @@ async function start(): Promise<void> {
       setSound(on);
       if (on) play('click');
     },
+    onHaptics: (on) => {
+      game.state.settings.haptics = on;
+      setHaptics(on);
+      if (on) haptic('medium');
+    },
     onReset: () => {
       clearLocal();
       clearCloud();
@@ -323,7 +330,7 @@ async function start(): Promise<void> {
     hud.open({ kind: 'room', def });
     focusRoom(def);
   };
-  window.addEventListener('pointerdown', unlockAudio, { capture: true });
+  installAudioUnlock();
   app.renderer.on('resize', () => camera.onResize());
   // кнопки Telegram сверху появляются чуть позже запуска — подвинуть камеру под новые отступы
   onTelegramLayout(() => requestAnimationFrame(() => syncSize()));
@@ -418,6 +425,7 @@ async function start(): Promise<void> {
     paused = false;
     document.body.classList.remove('paused');
     app.ticker.start();
+    unlockAudio(); // iOS после сворачивания «прерывает» звук — будим (если не выйдет, разбудит следующее касание)
     requestAnimationFrame(syncSize);
     const sec = (Date.now() - pausedAt) / 1000;
     if (!tutorial.active) offerOffline(sec);

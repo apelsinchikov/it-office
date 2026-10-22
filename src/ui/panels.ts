@@ -29,6 +29,7 @@ export interface Ctx {
   onDirectorDesk(): void;
   onLang(l: 'ru' | 'en'): void;
   onSound(on: boolean): void;
+  onHaptics(on: boolean): void;
   onReset(): void;
   onTutorial(): void;
   onReorg(): void;
@@ -883,6 +884,11 @@ export function settingsPanel(ctx: Ctx): Panel {
     ctx.onSound(!g.state.settings.sound);
     ctx.rebuild();
   });
+  const vib = h('button', { class: 'mode' });
+  vib.addEventListener('click', () => {
+    ctx.onHaptics(!g.state.settings.haptics);
+    ctx.rebuild();
+  });
   const langs = h('div', { class: 'modes' });
   for (const l of ['ru', 'en'] as const) {
     const b = h('button', { class: 'mode' + (getLang() === l ? ' active' : ''), text: l === 'ru' ? 'Русский' : 'English' });
@@ -907,6 +913,8 @@ export function settingsPanel(ctx: Ctx): Panel {
   });
   body.append(
     h('div', { class: 'worker' }, h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: t('set.sound') })), sound),
+    h('div', { class: 'worker' }, h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: t('set.haptics') })), vib),
+    h('p', { class: 'note small', text: t('set.soundHint') }),
     h('div', { class: 'section-head' }, h('h3', { text: t('set.lang') })),
     langs,
     tut,
@@ -920,6 +928,8 @@ export function settingsPanel(ctx: Ctx): Panel {
     refresh() {
       sound.textContent = g.state.settings.sound ? t('on') : t('off');
       sound.classList.toggle('active', g.state.settings.sound);
+      vib.textContent = g.state.settings.haptics ? t('on') : t('off');
+      vib.classList.toggle('active', g.state.settings.haptics);
     },
   };
 }

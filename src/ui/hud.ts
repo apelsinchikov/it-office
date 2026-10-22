@@ -36,6 +36,7 @@ export interface HudHandlers {
   onDirectorDesk(): void;
   onLang(l: 'ru' | 'en'): void;
   onSound(on: boolean): void;
+  onHaptics(on: boolean): void;
   onReset(): void;
   onTutorial(): void;
   onReorg(): void;
@@ -174,6 +175,7 @@ export class Hud {
       onDirectorDesk: hd.onDirectorDesk,
       onLang: hd.onLang,
       onSound: hd.onSound,
+      onHaptics: hd.onHaptics,
       onReset: hd.onReset,
       onTutorial: hd.onTutorial,
       onReorg: hd.onReorg,

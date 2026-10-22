@@ -34,6 +34,8 @@ export interface QuestState {
 
 export interface Settings {
   sound: boolean;
+  /** Вибрация Telegram (по умолчанию включена). */
+  haptics: boolean;
   lang: 'ru' | 'en' | null;
 }
 
@@ -148,7 +150,7 @@ export function newState(now = Date.now()): GameState {
     achievements: [],
     phrasesSeen: [],
     bonusPhrases: 0,
-    settings: { sound: true, lang: null },
+    settings: { sound: true, haptics: true, lang: null },
     tutorialDone: false,
     createdAt: now,
     director: newDirector(),
