@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './style.css';
 import { installAudioUnlock, play, setSound, unlockAudio } from './audio';
+import { DEBUG, DEBUG_COINS } from './debug';
 import { haptic, setHaptics } from './haptics';
 import { checkAchievements, ACHIEVEMENTS } from './game/achievements';
 import { companyDef } from './game/config';
@@ -307,7 +308,7 @@ async function start(): Promise<void> {
   );
 
   // ?debug: заметки с булавками и паузой — чтобы показать Claude место прямо в игре
-  const notes = location.search.includes('debug')
+  const notes = DEBUG
     ? new DebugNotes(
         (x, y) => office.container.toLocal({ x, y }),
         (p) => office.container.toGlobal(p),
@@ -368,7 +369,7 @@ async function start(): Promise<void> {
   });
 
   // ?debug — доступ к игре из консоли для проверки
-  if (location.search.includes('debug'))
+  if (DEBUG)
     Object.assign(window, {
       __game: game,
       __hud: hud,
@@ -385,6 +386,8 @@ async function start(): Promise<void> {
   }
   const CHEAT_ENABLED = _isLocalHost() && location.search.includes('cheat');
   if (CHEAT_ENABLED) game.state.run.coins = 999_000_000_000_000_000;
+  // ?debug — 999Qa монет; режим отладки ничего не сохраняет (см. src/debug.ts)
+  if (DEBUG) game.state.run.coins += DEBUG_COINS;
 
   // офлайн-доход
   const offerOffline = (sec: number): void => {

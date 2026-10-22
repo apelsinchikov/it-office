@@ -5,6 +5,7 @@
 - **NEVER** modify `save.ts`, `remote.ts`, or any file that reads/writes game state without explicitly asking me first.
 - When adding features that could affect save/load, **always mention it** and ask confirmation before touching any save-related code.
 - When `?cheat` is in the URL — **no saves at all** (local, cloud, remote). Cheat mode is strictly localhost-only.
+- When `?debug` is in the URL (gives 999Qa coins) — **no saves at all**: not local, not Telegram CloudStorage, not Supabase. The guard lives inside the write functions (`src/debug.ts` → `save.ts`, `remote.ts`); never bypass or weaken it.
 
 ## Economy — do not change without explicit permission
 

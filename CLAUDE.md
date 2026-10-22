@@ -15,7 +15,8 @@
 
 - Хостинг — только GitHub Pages; бот `@it_office_game_bot`, Mini App https://apelsinchikov.github.io/it-office/.
 - Cloudflare не использовать: блокирует пользователей из России.
-- Сервера и базы данных пока нет (рейтинг — позже). Сохранение — на устройстве и в Telegram CloudStorage.
+- Сохранение — на устройстве, в Telegram CloudStorage и в Supabase (Edge Function `progress`); рейтинг — в Supabase.
+- Режим отладки `?debug` (999Qa монет, заметки) НИКОГДА не сохраняет прогресс: ни на устройстве, ни в Telegram CloudStorage, ни в Supabase. Запрет стоит в самих функциях записи (`src/debug.ts` → `save.ts`, `remote.ts`) — не обходить и не ослаблять.
 
 ## Документы
 

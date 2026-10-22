@@ -4,6 +4,7 @@
 // а если её нет — из данных Telegram на устройстве.
 // Нет сети или Supabase недоступен — игра продолжает работать на локальном и облачном сохранении Telegram.
 
+import { DEBUG } from '../debug';
 import { completionFromState, normalize, progressScore, type GameState } from './state';
 
 const URL = 'https://fytodyhctsidtqssolds.supabase.co';
@@ -81,7 +82,8 @@ function companyReorgCount(s: GameState): number {
 
 /** Записать прогресс. force — после сброса, иначе сервер не примет сохранение «отсталее» своего. */
 export async function saveRemote(s: GameState, force = false): Promise<boolean> {
-  if (!remoteAvailable() || (saving && !force) || _isCheatActive()) return false;
+  // режим отладки и чит-режим на сервер ничего не пишут
+  if (DEBUG || !remoteAvailable() || (saving && !force) || _isCheatActive()) return false;
   saving = true;
   try {
     s.lastSeen = Date.now();

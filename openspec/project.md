@@ -52,6 +52,7 @@ TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс пове
 - Общение, комментарии в коде, коммиты — по-русски.
 - Коммиты только от `apelsinchikov <324604926+apelsinchikov@users.noreply.github.com>`, без `Co-Authored-By` и `Claude-Session`.
 - Выкладка: push в `main` → GitHub Actions (`npm test`, `npm run build`) → GitHub Pages. Cloudflare не использовать.
+- Режим `?debug` (999Qa монет, заметки) НИКОГДА не сохраняет прогресс — ни локально, ни в Telegram CloudStorage, ни в Supabase (`src/debug.ts`, проверка внутри `save.ts` и `remote.ts`).
 - Правила игры меняются в трёх местах: код, `docs/GDD.md` + копия GDD в Claude Docs, и `openspec/specs/*`.
 
 ## Как проверять в облачном контейнере

@@ -1,6 +1,7 @@
 // Сохранение: на устройстве (localStorage) и в Telegram CloudStorage — без своего сервера.
 // CloudStorage хранит строки до 4096 символов, поэтому сохранение режется на части.
 
+import { DEBUG } from '../debug';
 import { newState, normalize, progressScore, type GameState } from './state';
 
 const KEY = 'it-office.save.v2';
@@ -26,6 +27,7 @@ export function loadLocal(now = Date.now()): GameState {
 }
 
 export function saveLocal(s: GameState): void {
+  if (DEBUG) return; // режим отладки ничего не сохраняет
   if (_isCheatActive()) return;
   try {
     s.lastSeen = Date.now();
@@ -36,6 +38,7 @@ export function saveLocal(s: GameState): void {
 }
 
 export function clearLocal(): void {
+  if (DEBUG) return;
   try {
     localStorage.removeItem(KEY);
     localStorage.removeItem(OLD_KEY);
@@ -76,6 +79,7 @@ function setItem(cs: CloudStorage, k: string, v: string): Promise<boolean> {
 let saving = false;
 
 export async function saveCloud(s: GameState): Promise<boolean> {
+  if (DEBUG) return false; // режим отладки ничего не сохраняет
   const cs = cloud();
   if (!cs || saving || _isCheatActive()) return false;
   saving = true;
@@ -122,6 +126,7 @@ export function loadCloud(): Promise<GameState | null> {
 }
 
 export function clearCloud(): void {
+  if (DEBUG) return;
   const cs = cloud();
   if (!cs) return;
   try {
