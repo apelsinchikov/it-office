@@ -215,18 +215,23 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     const u1 = 0.92;
     const v1 = 0.24;
     P.shadow(g, u0, u1, 0.0, v1);
-    // основание на ножках-полозьях
-    P.box(g, u0, u1, 0.0, v1, 0, 12, dark, side, shade(side, -0.1));
-    // спинка — от дальнего подлокотника (а не от самого края), чтобы над подлокотником не торчал выступ
-    P.box(g, u0 + 0.045, u1, 0.0, 0.07, 12, 42, shade(sofaColor, 0.1), dark, side);
-    // подлокотник дальний (у меньшего u)
-    P.box(g, u0, u0 + 0.045, 0.0, v1, 12, 28, shade(sofaColor, 0.06), dark, side);
-    // две подушки сиденья — без зазора, общий цвет
+    // Как настоящий диван: спинка во всю ширину (от внешнего края одного подлокотника до внешнего края другого)
+    // и заметно выше подлокотников; подлокотники стоят перед спинкой; подушки сиденья — между подлокотниками
+    // вплотную к спинке, без щели. Лицевая сторона спинки светлая — читается как мягкая, а не как дыра.
+    const arm = 0.05; // ширина подлокотника
+    const back = 0.07; // толщина спинки
+    const light = shade(sofaColor, 0.1);
+    const soft = shade(sofaColor, -0.08);
+    // спинка (дальше всех от камеры — рисуется первой)
+    P.box(g, u0, u1, 0.0, back, 0, 52, light, soft, side);
+    // дальний подлокотник — перед спинкой
+    P.box(g, u0, u0 + arm, back, v1, 0, 30, light, dark, side);
+    // две подушки сиденья вплотную друг к другу и к спинке
     const mid = (u0 + u1) / 2;
-    P.box(g, u0 + 0.045, mid, 0.07, v1, 12, 19, sofaColor, dark, side, 2);
-    P.box(g, mid, u1 - 0.045, 0.07, v1, 12, 19, sofaColor, dark, side, 2);
-    // подлокотник ближний
-    P.box(g, u1 - 0.045, u1, 0.0, v1, 12, 28, shade(sofaColor, 0.06), dark, side);
+    P.box(g, u0 + arm, mid, back, v1, 0, 20, sofaColor, dark, side);
+    P.box(g, mid, u1 - arm, back, v1, 0, 20, sofaColor, dark, side);
+    // ближний подлокотник
+    P.box(g, u1 - arm, u1, back, v1, 0, 30, light, dark, side);
     items.push(c);
   }
 

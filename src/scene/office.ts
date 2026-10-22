@@ -554,6 +554,7 @@ export class OfficeView {
     const pl = new Container();
     pl.addChild(plant(th.plant, true));
     place(pl, dirDef, 0.86, 0.14, 0.8);
+    this.dirPlant = pl;
     this.director?.char.root.parent?.removeChild(this.director.char.root);
     this.director = new RoomWalker(
       DIRECTOR_LOOK,
@@ -836,6 +837,7 @@ export class OfficeView {
     if (this.dirSeat) this.dirSeat.root.visible = dirOpen && this.director.sitting;
     this.syncRest();
     this.syncDirectorDesk();
+    this.syncInteriors();
     this.syncHireMarks();
     this.updateLockPrices();
   }
@@ -848,6 +850,7 @@ export class OfficeView {
     for (const c of this.lounge.items) this.world.addChild(c);
     this.lounge.steam.visible = this.coffeeN > 0;
     this.setFridge(this.fridgeIsOpen);
+    this.syncInteriors();
   }
 
   private setFridge(open: boolean): void {
@@ -910,6 +913,25 @@ export class OfficeView {
 
   /** Ковёр и картина кабинета директора (в слое мира, пересоздаются при покупке). */
   private dirDecor: Graphics[] = [];
+  /** Растение в кабинете директора (прячется вместе с обстановкой, пока кабинет не куплен). */
+  private dirPlant: Container | null = null;
+
+  /**
+   * Пока комната не куплена, её обстановку не видно — как у закрытых отделов: зона отдыха, туалет, кабинет директора.
+   * Прохожие в закрытые комнаты и так не заходят (см. blocked), директор виден только в открытом кабинете.
+   */
+  private syncInteriors(): void {
+    const g = this.game;
+    const rest = g.roomOpen('rest');
+    const toilet = g.roomOpen('toilet');
+    const dir = g.roomOpen('director');
+    // при пересборке сцены старые предметы уже уничтожены — их не трогаем
+    for (const c of this.lounge?.items ?? []) if (!c.destroyed) c.visible = rest;
+    for (const c of this.toilet?.items ?? []) if (!c.destroyed) c.visible = toilet;
+    this.directorDeskG.visible = dir;
+    if (this.dirPlant && !this.dirPlant.destroyed) this.dirPlant.visible = dir;
+    for (const c of this.dirDecor) if (!c.destroyed) c.visible = dir;
+  }
 
   syncDirectorDesk(): void {
     const g = this.game;
@@ -972,6 +994,7 @@ export class OfficeView {
       this.world.addChild(pic);
       this.dirDecor.push(pic);
     }
+    this.syncInteriors();
   }
 
   private syncHireMarks(): void {
@@ -1257,7 +1280,9 @@ export class OfficeView {
     this.time += dt;
     for (const v of this.desks.values()) v.update(dt, typingSpeed);
     for (const m of this.managers) m?.update(dt);
-    this.director.update(dt);
+    // директор живёт только в открытом кабинете: иначе, вставая из кресла, он появлялся бы в закрытой комнате
+    if (this.game.roomOpen('director')) this.director.update(dt);
+    else if (this.director.char.root.visible) this.director.char.root.visible = false;
     if (this.directorSitting && this.dirSeat) {
       this.dirSeat.update(dt);
       this.dirHands.forEach((h, i) => (h.y = -3 * Math.max(0, Math.sin(this.time * 17 + i * Math.PI))));
