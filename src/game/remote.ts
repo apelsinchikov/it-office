@@ -4,7 +4,7 @@
 // а если её нет — из данных Telegram на устройстве.
 // Нет сети или Supabase недоступен — игра продолжает работать на локальном и облачном сохранении Telegram.
 
-import { normalize, progressScore, type GameState } from './state';
+import { completionFromState, normalize, progressScore, type GameState } from './state';
 
 const URL = 'https://fytodyhctsidtqssolds.supabase.co';
 const FUNCTION_URL = `${URL}/functions/v1/progress`;
@@ -66,8 +66,21 @@ function _isCheatActive(): boolean {
   return h === 'localhost' || h === '127.0.0.1' || h.startsWith('127.');
 }
 
+/** Процент компании для рейтинга (0–100) — всегда считаем здесь из самого сохранения, чтобы не перепутать долю и проценты. */
+function companyPercent(s: GameState): number {
+  return Math.max(0, Math.min(100, Math.floor(completionFromState(s.run) * 100)));
+}
+
+/**
+ * Реорганизации в текущей компании для рейтинга. Счётчик companyReorgs появился позже самих реорганизаций,
+ * поэтому в первой компании берём общий счётчик reorgs (там они совпадают). Само сохранение не меняем.
+ */
+function companyReorgCount(s: GameState): number {
+  return s.company === 1 ? Math.max(s.reorgs, s.companyReorgs) : s.companyReorgs;
+}
+
 /** Записать прогресс. force — после сброса, иначе сервер не примет сохранение «отсталее» своего. */
-export async function saveRemote(s: GameState, force = false, companyProgress = 0): Promise<boolean> {
+export async function saveRemote(s: GameState, force = false): Promise<boolean> {
   if (!remoteAvailable() || (saving && !force) || _isCheatActive()) return false;
   saving = true;
   try {
@@ -76,8 +89,8 @@ export async function saveRemote(s: GameState, force = false, companyProgress = 
       action: 'save',
       state: s,
       company_no: s.company,
-      company_progress: companyProgress,
-      company_reorgs: s.companyReorgs,
+      company_progress: companyPercent(s),
+      company_reorgs: companyReorgCount(s),
       lifetime: Number.isFinite(s.totalEarned) ? s.totalEarned : 0,
       score: progressScore(s),
       save_created_at: Math.floor(s.createdAt),

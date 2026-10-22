@@ -11,7 +11,7 @@ import { claimableCount, ensureDaily } from './game/quests';
 import { fetchResetBefore } from './game/resets';
 import { loadRemote, saveRemote, setRemoteAuth } from './game/remote';
 import { better, clearCloud, clearLocal, cloudAvailable, loadCloud, loadLocal, saveCloud, saveLocal } from './game/save';
-import { newState, normalize, completionFromState, type GameState } from './game/state';
+import { newState, normalize, type GameState } from './game/state';
 import { detectLang, setLang, t, tr, type Key } from './i18n';
 import { Camera } from './scene/camera';
 import * as charactersM from './scene/characters';
@@ -98,11 +98,11 @@ async function preloadState(tg: ReturnType<typeof initTelegram>): Promise<Preloa
     saveLocal(bestNormalized);
     const remoteOk = fresh(remoteResult.state);
     const remoteStale = !!remoteResult.state && !remoteOk;
-    await Promise.all([saveCloud(bestNormalized), saveRemote(bestNormalized, remoteStale, completionFromState(bestNormalized.run))]);
+    await Promise.all([saveCloud(bestNormalized), saveRemote(bestNormalized, remoteStale)]);
   } else {
     // данные совпали — отправляем локальный прогресс в Supabase
     if (telegram_id > 0 && !remoteResult.failed) {
-      void saveRemote(bestNormalized, wasReset, completionFromState(bestNormalized.run));
+      void saveRemote(bestNormalized, wasReset);
     }
   }
 
@@ -190,7 +190,7 @@ async function start(): Promise<void> {
     if (paused) return;
     save();
     void saveCloud(game.state);
-    void saveRemote(game.state, false, Math.floor(game.completion() * 100));
+    void saveRemote(game.state);
   };
 
   // eslint-disable-next-line prefer-const
@@ -223,7 +223,7 @@ async function start(): Promise<void> {
       clearLocal();
       clearCloud();
       // на сервере тоже начинаем заново, иначе при входе вернулось бы старое сохранение
-      void saveRemote(newState(), true, 0).finally(() => setTimeout(() => location.reload(), 300));
+      void saveRemote(newState(), true).finally(() => setTimeout(() => location.reload(), 300));
     },
     onTutorial: () => tutorial.start(),
     onReorg: () => {
@@ -437,7 +437,7 @@ async function start(): Promise<void> {
   window.setInterval(() => {
     if (paused) return;
     void saveCloud(game.state);
-    void saveRemote(game.state, false, Math.floor(game.completion() * 100));
+    void saveRemote(game.state);
   }, SAVE_CLOUD_MS);
 
   // раз в секунду: достижения, задания, события
