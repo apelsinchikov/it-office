@@ -1,6 +1,7 @@
-// Прогресс и рейтинг через Supabase Edge Function.
-// Edge Function принимает telegram_id напрямую — не нужна проверка HMAC initData.
-// Работает и на мобильных, и на десктопных Telegram.
+// Прогресс и рейтинг через Supabase Edge Function `progress`.
+// Вместе с telegram_id отправляем подписанную строку Telegram (initData): сервер проверяет подпись
+// и записывает итог (мягкий режим — пока только записывает, не блокирует). Имя для рейтинга берётся из подписи,
+// а если её нет — из данных Telegram на устройстве.
 // Нет сети или Supabase недоступен — игра продолжает работать на локальном и облачном сохранении Telegram.
 
 import { normalize, progressScore, type GameState } from './state';
@@ -18,11 +19,25 @@ export function remoteAvailable(): boolean {
   return telegram_id > 0;
 }
 
+/** Данные Telegram для сервера. Читаем при каждом запросе: на некоторых клиентах они приходят не сразу. */
+function telegramFields(): Record<string, unknown> {
+  const wa = window.Telegram?.WebApp;
+  // именно исходная строка Telegram: только в ней есть подпись hash
+  const u = wa?.initDataUnsafe?.user;
+  return {
+    init_data: wa?.initData ?? '',
+    platform: wa?.platform ?? '',
+    first_name: u?.first_name ?? '',
+    last_name: u?.last_name ?? '',
+    username: u?.username ?? '',
+  };
+}
+
 async function postProgress(body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch(FUNCTION_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telegram_id, ...body }),
+    body: JSON.stringify({ telegram_id, ...telegramFields(), ...body }),
   });
   if (!res.ok) throw new Error(`progress: ${res.status}`);
   return res.json();

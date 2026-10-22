@@ -1,75 +1,106 @@
+// Edge Function `progress`: прогресс и рейтинг IT-Office.
+// Вся логика и проверка подписи Telegram — в функциях базы srv_* (supabase/migrations/20261023000000_progress_server_v2.sql).
+// Функция ходит в базу секретным ключом; браузер сам вызвать srv_* не может.
+// Ответы совместимы с прежней версией клиента: load → {state, save_created_at}, save → {success}, leaderboard → {top, me}.
+// Деплой: Supabase → Edge Functions → progress → Code → вставить файл → Deploy. «Verify JWT» должна быть выключена.
+
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-function key(kind: 'secret' | 'publishable'): string {
-  const dict = Deno.env.get(kind === 'secret' ? 'SUPABASE_SECRET_KEYS' : 'SUPABASE_PUBLISHABLE_KEYS')
+function secretKey(): string {
+  const dict = Deno.env.get('SUPABASE_SECRET_KEYS')
   if (dict) {
     try {
       const value = JSON.parse(dict).default
       if (value) return value
     } catch {
-      // legacy
+      // старый формат ключей
     }
   }
-  return Deno.env.get(kind === 'secret' ? 'SUPABASE_SERVICE_ROLE_KEY' : 'SUPABASE_ANON_KEY') ?? ''
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 }
 
-Deno.serve(async (req) => {
-  // CORS заголовки для доступа из браузера
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  }
+const headers = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers })
-  }
+function reply(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers })
+}
+
+const str = (v: unknown, max = 8192): string => (typeof v === 'string' ? v.slice(0, max) : '')
+const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
+  if (req.method !== 'POST') return reply({ error: 'method' }, 405)
 
   const url = Deno.env.get('SUPABASE_URL')
-  if (!url) return new Response(JSON.stringify({ error: 'not_configured' }), { status: 500, headers })
+  const key = secretKey()
+  if (!url || !key) return reply({ error: 'not_configured' }, 500)
+  const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+
+  let body: Record<string, unknown>
+  try {
+    body = await req.json()
+  } catch {
+    return reply({ error: 'bad_json' }, 400)
+  }
+
+  const action = str(body.action, 32)
+  const telegramId = Math.floor(num(body.telegram_id))
+  const initData = str(body.init_data)
+  const platform = str(body.platform, 32)
 
   try {
-    const body = await req.json()
-    const { action, telegram_id, state, company_no, company_progress, company_reorgs, lifetime, score, save_created_at, force, p_limit } = body
-
-    console.log('progress:', JSON.stringify({ action, telegram_id, company_progress, company_reorgs }))
-
-    const supabase = createClient(url, key('secret'), { auth: { persistSession: false, autoRefreshToken: false } })
-
     if (action === 'load') {
-      const { data, error } = await supabase.rpc('ef_load_progress', { p_telegram_id: telegram_id })
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers })
-      if (!data) return new Response(JSON.stringify({ state: null, save_created_at: 0 }), { headers })
-      return new Response(JSON.stringify({ state: data.state, save_created_at: data.save_created_at }), { headers })
+      const { data, error } = await db.rpc('srv_load_progress', { p_telegram_id: telegramId, p_init_data: initData, p_platform: platform })
+      if (error) throw error
+      console.log('load', telegramId, platform, data?.auth)
+      return reply({ state: data?.state ?? null, save_created_at: data?.save_created_at ?? 0 })
     }
 
     if (action === 'save') {
-      const { data, error } = await supabase.rpc('ef_save_progress', {
-        p_telegram_id: telegram_id,
-        p_state: state,
-        p_company_no: company_no,
-        p_company_progress: company_progress || 0,
-        p_company_reorgs: company_reorgs || 0,
-        p_lifetime: lifetime,
-        p_score: score,
-        p_save_created_at: save_created_at || Date.now(),
-        p_force: force || false,
+      const { data, error } = await db.rpc('srv_save_progress', {
+        p_telegram_id: telegramId,
+        p_init_data: initData,
+        p_platform: platform,
+        p_first_name: str(body.first_name, 64),
+        p_last_name: str(body.last_name, 64),
+        p_username: str(body.username, 64) || null,
+        p_state: body.state ?? null,
+        p_company_no: Math.floor(num(body.company_no, 1)),
+        p_company_progress: Math.floor(num(body.company_progress)),
+        p_company_reorgs: Math.floor(num(body.company_reorgs)),
+        p_lifetime: num(body.lifetime),
+        p_score: num(body.score),
+        p_save_created_at: Math.floor(num(body.save_created_at)),
+        p_force: body.force === true,
       })
-      if (error) return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers })
-      if (data === false) return new Response(JSON.stringify({ success: false, reason: 'stale' }), { headers })
-      return new Response(JSON.stringify({ success: !!data }), { headers })
+      if (error) throw error
+      console.log('save', telegramId, platform, data?.auth, data?.ok ? 'ok' : data?.reason)
+      return reply({ success: data?.ok === true, reason: data?.reason ?? null })
     }
 
     if (action === 'leaderboard') {
-      const { data, error } = await supabase.rpc('ef_leaderboard', { p_limit: p_limit || 100, p_telegram_id: telegram_id })
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers })
-      return new Response(JSON.stringify(data), { headers })
+      const { data, error } = await db.rpc('srv_leaderboard', { p_limit: Math.floor(num(body.p_limit, 100)), p_telegram_id: telegramId })
+      if (error) throw error
+      return reply(data ?? { top: [], me: null })
     }
 
-    return new Response(JSON.stringify({ error: 'unknown action' }), { status: 400, headers })
+    if (action === 'auth_stats') {
+      // только счётчики по устройствам и видам подписи, без имён и id
+      const { data, error } = await db.rpc('srv_auth_stats')
+      if (error) throw error
+      return reply(data ?? [])
+    }
+
+    return reply({ error: 'unknown_action' }, 400)
   } catch (err) {
-    console.error('progress error:', err.message, err.stack)
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers })
+    const message = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err)
+    console.error('progress error', action, message)
+    return reply({ success: false, error: message }, 500)
   }
 })

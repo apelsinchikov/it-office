@@ -135,8 +135,8 @@ async function start(): Promise<void> {
   await app.init({
     resizeTo: gameEl,
     background: '#262338',
-    // ?aa=0 — без сглаживания, чтобы сравнить картинку и нагрев на телефоне
-    antialias: new URLSearchParams(location.search).get('aa') !== '0',
+    // без сглаживания: при плотности экрана 2× разницы не видно, а видеокарте легче; ?aa=1 — включить для сравнения
+    antialias: new URLSearchParams(location.search).get('aa') === '1',
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
