@@ -154,11 +154,12 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
       ellipse(g, x, y, 7, 3, { fill: 0xffffff, line: 2 });
     }
     // кружки на стойке
-    for (const [u, col] of [
-      [0.05, 0xffffff],
-      [0.24, 0xff7a45],
+    // кружки — на ближних углах тумбы, перед кофемашиной: иначе большая машина их «просвечивала»
+    for (const [u, v, col] of [
+      [0.055, 0.165, 0xffffff],
+      [0.215, 0.165, 0xff7a45],
     ] as const) {
-      const [x, y] = P.P(u, 0.12, H);
+      const [x, y] = P.P(u, v, H);
       rect(g, x - 4, y - 9, 8, 9, 2, col);
     }
     const [sx, sy] = P.P(0.15, 0.09, H + (t <= 0 ? 16 : t === 1 ? 32 : t === 2 ? 46 : 42));
@@ -216,8 +217,8 @@ export function buildLounge(def: RoomDef, tiers: { coffee: number; fridge: numbe
     P.shadow(g, u0, u1, 0.0, v1);
     // основание на ножках-полозьях
     P.box(g, u0, u1, 0.0, v1, 0, 12, dark, side, shade(side, -0.1));
-    // спинка
-    P.box(g, u0, u1, 0.0, 0.07, 12, 42, shade(sofaColor, 0.1), dark, side);
+    // спинка — от дальнего подлокотника (а не от самого края), чтобы над подлокотником не торчал выступ
+    P.box(g, u0 + 0.045, u1, 0.0, 0.07, 12, 42, shade(sofaColor, 0.1), dark, side);
     // подлокотник дальний (у меньшего u)
     P.box(g, u0, u0 + 0.045, 0.0, v1, 12, 28, shade(sofaColor, 0.06), dark, side);
     // две подушки сиденья — без зазора, общий цвет

@@ -494,6 +494,8 @@ export class OfficeView {
         // в туалете у стен этажа — кабинки и зеркала, окон там нет
         const toiletT = 1 / (f.max - f.min);
         if (side === 0 ? t1 > 1 - toiletT : t0 < toiletT) continue;
+        // за диваном и стойкой с кофемашиной в зоне отдыха окон тоже нет (зона отдыха — вторая комната вдоль этой стены)
+        if (side === 1 && t1 > P / (f.max - f.min) && t0 < (P + 1) / (f.max - f.min)) continue;
         const x0 = a.x + (b.x - a.x) * t0;
         const y0 = a.y + (b.y - a.y) * t0;
         const x1 = a.x + (b.x - a.x) * t1;
@@ -1196,6 +1198,14 @@ export class OfficeView {
       const ready = (['coffee', 'fridge', 'games'] as const).some((k) => g.run.rest[k] < g.restMax(k) && g.canAfford(g.restCost(k)));
       if (ready) {
         const w = roomWorld(roomById('rest'), 0.5, 0.5);
+        out.push({ pos: { x: w.x, y: w.y - 120 }, text: `▲ ${t('rest.badge')}`, kind: 'up' });
+      }
+    }
+    if (g.roomOpen('toilet')) {
+      // можно открыть следующую кабинку — как значок у зоны отдыха
+      const ready = [1, 2, 3].some((i) => g.toiletStallAvailable(i) && g.canAfford(g.toiletStallCost(i)));
+      if (ready) {
+        const w = roomWorld(roomById('toilet'), 0.5, 0.5);
         out.push({ pos: { x: w.x, y: w.y - 120 }, text: `▲ ${t('rest.badge')}`, kind: 'up' });
       }
     }

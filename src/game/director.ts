@@ -164,14 +164,30 @@ export function usePerk(g: Game, kind: PerkKind, tier: Tier): boolean {
     g.grant(g.incomePerSec(true) * perkCashSec(g, tier), 'quest');
     return true;
   }
-  // такой же уже действует — берём сильнейший уровень и складываем время
-  const same = s.active.find((a) => a.kind === kind);
+  // Перки одного вида не сливаются: такой же уровень — время складывается, другой уровень — в очередь.
+  // Сначала действует сильнейший, остальные ждут (их время не идёт).
   const dur = perkDuration(g, kind, tier);
-  if (same) {
-    same.tier = Math.max(same.tier, tier) as Tier;
-    same.left += dur;
-  } else s.active.push({ kind, tier, left: dur });
+  const same = s.active.find((a) => a.kind === kind && a.tier === tier);
+  if (same) same.left += dur;
+  else s.active.push({ kind, tier, left: dur });
   return true;
+}
+
+/** Перк этого вида, который действует сейчас: сильнейший из применённых. */
+export function currentPerk(g: Game, kind: PerkKind): ActivePerk | undefined {
+  let best: ActivePerk | undefined;
+  for (const a of g.state.director.active) if (a.kind === kind && (!best || a.tier > best.tier)) best = a;
+  return best;
+}
+
+/** Перк ждёт своей очереди (действует более сильный того же вида). */
+export function perkWaiting(g: Game, a: ActivePerk): boolean {
+  return currentPerk(g, a.kind) !== a;
+}
+
+/** Порядок показа: по виду, внутри вида — сначала действующий, потом очередь. */
+export function activePerksSorted(g: Game): ActivePerk[] {
+  return [...g.state.director.active].sort((x, y) => PERK_KINDS.indexOf(x.kind) - PERK_KINDS.indexOf(y.kind) || y.tier - x.tier);
 }
 
 /** Обстановка кабинета директора увеличивает награды: перки действуют дольше, «деньги сразу» — больше. */
@@ -194,15 +210,16 @@ export function inventoryList(g: Game): { kind: PerkKind; tier: Tier; count: num
 }
 
 export function perkPower(g: Game, kind: PerkKind): number {
-  const a = g.state.director.active.find((x) => x.kind === kind);
+  const a = currentPerk(g, kind);
   return a ? PERKS[kind].power[a.tier] : 0;
 }
 
-/** Таймеры действующих перков (идут только в игре). */
+/** Таймеры действующих перков (идут только в игре). У каждого вида тикает только тот, что действует сейчас. */
 export function tickPerks(g: Game, dt: number): void {
   const list = g.state.director.active;
-  for (let i = list.length - 1; i >= 0; i--) {
-    list[i].left -= dt;
-    if (list[i].left <= 0) list.splice(i, 1);
+  for (const kind of PERK_KINDS) {
+    const a = currentPerk(g, kind);
+    if (a) a.left -= dt;
   }
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].left <= 0) list.splice(i, 1);
 }

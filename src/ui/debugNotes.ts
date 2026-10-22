@@ -23,7 +23,10 @@ function describeUi(el: Element): string {
   const clean = (s: string | null | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, 90);
   const sheet = el.closest('.sheet');
   const title = sheet ? clean(sheet.querySelector('.sheet-titles')?.firstElementChild?.textContent) : '';
-  const row = (el.closest('.worker, .card, .rating-row, .section-head, .sheet-head, button, .nav, .topbar, .chip') ?? el) as HTMLElement;
+  // сначала вся строка (название + кнопка), иначе — ближайшая кнопка или блок
+  const row = (el.closest('.worker, .card, .rating-row, .f-item, .stat-big') ??
+    el.closest('button, .section-head, .sheet-head, .nav, .topbar, .chip') ??
+    el) as HTMLElement;
   // innerText — с пробелами между строками кнопки («+1 ур. 3,2»), а не слитно, как textContent
   const what = clean(row.innerText ?? row.textContent);
   return [title && `панель «${title}»`, what && `«${what}»`].filter(Boolean).join(' · ') || el.tagName.toLowerCase();

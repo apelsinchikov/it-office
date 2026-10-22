@@ -3,6 +3,7 @@
 import { bestPurchase, type Purchase } from '../game/advisor';
 import { formatNumber } from '../game/format';
 import type { Game, GameEvent } from '../game/game';
+import { activePerksSorted, perkWaiting } from '../game/director';
 import { claimableCount } from '../game/quests';
 import { perkTitle } from './panels';
 import { duration, t, type Key } from '../i18n';
@@ -376,7 +377,10 @@ export class Hud {
     this.grantsChip.innerHTML = `${ICONS.star}<span>${formatNumber(g.state.grants)}</span>`;
     this.grantsChip.classList.toggle('pulse', g.reorgIsGood());
     this.perksEl.replaceChildren(
-      ...g.state.director.active.map((a) => h('span', { class: 'chip perk-chip', text: `${perkTitle(a.kind, a.tier)} · ${duration(Math.ceil(a.left))}` })),
+      ...activePerksSorted(g).map((a) => {
+        const wait = perkWaiting(g, a);
+        return h('span', { class: 'chip perk-chip' + (wait ? ' waiting' : ''), text: `${wait ? `${t('perk.next')} ` : ''}${perkTitle(a.kind, a.tier)} · ${duration(Math.ceil(a.left))}` });
+      }),
     );
     const n = claimableCount(g);
     this.questBadge.textContent = n ? String(n) : '';

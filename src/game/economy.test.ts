@@ -257,6 +257,25 @@ describe('директор IT', () => {
     expect(perkPower(g, 'speed')).toBe(0);
   });
 
+  it('перки одного вида не сливаются: сильный действует, слабый ждёт очереди', () => {
+    const g = fresh();
+    g.state.director.inventory['income:2'] = 1;
+    g.state.director.inventory['income:1'] = 1;
+    expect(usePerk(g, 'income', 1)).toBe(true); // ×3
+    expect(usePerk(g, 'income', 2)).toBe(true); // ×5 — сильнее, действует первым
+    expect(g.state.director.active.length).toBe(2);
+    expect(perkPower(g, 'income')).toBe(5);
+    const strong = perkDuration(g, 'income', 2);
+    const weak = perkDuration(g, 'income', 1);
+    tickPerks(g, strong - 1);
+    expect(perkPower(g, 'income')).toBe(5);
+    tickPerks(g, 2); // сильный закончился, время слабого не тратилось
+    expect(perkPower(g, 'income')).toBe(3);
+    expect(g.state.director.active[0].left).toBe(weak);
+    tickPerks(g, weak + 1);
+    expect(perkPower(g, 'income')).toBe(0);
+  });
+
   it('невыполненное задание просто пропадает', () => {
     const g = fresh();
     g.run.rooms.director = true;

@@ -3,7 +3,7 @@
 import type { Purchase } from '../game/advisor';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { COMPANY_STYLES, DEPTS, DESKS, SEQUENCE, SHOP, companyDef, stepIndex, type RoomId, type Step } from '../game/config';
-import { PERKS, TIER_NAMES, acceptTask, declineTask, inventoryList, perkCashSec, perkDuration, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
+import { PERKS, TIER_NAMES, acceptTask, activePerksSorted, perkWaiting, declineTask, inventoryList, perkCashSec, perkDuration, taskProgress, usePerk, type PerkKind, type Tier } from '../game/director';
 import { DIR_ITEMS, DIR_SINGLES, DIR_SINGLE_BONUS, DIR_TIER_BONUS, FURN_SINGLE_BONUS, FURN_TIER_BONUS, HIRE_GATES, REST, REST_KINDS, TOILET_BONUS, TOILET_STALLS, nextMilestone, payoutIncome, type RestKind } from '../game/economy';
 import { formatNumber } from '../game/format';
 import { loadLeaderboard, remoteAvailable, type RatingRow } from '../game/remote';
@@ -392,6 +392,7 @@ export function directorPanel(ctx: Ctx): Panel {
     h('div', { class: 'section-head' }, h('h3', { text: t('task.title') })),
     taskCard,
     h('div', { class: 'section-head' }, h('h3', { text: t('inv.title') })),
+    h('p', { class: 'note small', text: t('inv.rules') }),
     active,
     inv,
   );
@@ -459,7 +460,10 @@ export function directorPanel(ctx: Ctx): Panel {
         tBtns.style.display = 'none';
       }
       active.replaceChildren(
-        ...ds.active.map((a) => h('div', { class: 'perk-active' }, h('span', { text: `${t('inv.active')}: ${perkTitle(a.kind, a.tier, g)}` }), h('b', { text: duration(Math.ceil(a.left)) }))),
+        ...activePerksSorted(g).map((a) => {
+          const wait = perkWaiting(g, a);
+          return h('div', { class: 'perk-active' + (wait ? ' waiting' : '') }, h('span', { text: `${t(wait ? 'inv.queued' : 'inv.active')}: ${perkTitle(a.kind, a.tier, g)}` }), h('b', { text: duration(Math.ceil(a.left)) }));
+        }),
       );
       drawInv();
     },
@@ -480,77 +484,32 @@ export function notePanel(ctx: Ctx, def: RoomDef): Panel {
 export function toiletPanel(ctx: Ctx): Panel {
   const g = ctx.game;
   if (!g.roomOpen('toilet')) return roomLockedPanel(ctx, 'toilet');
-  const body = h('div', { class: 'panel-body' });
-  const bonusEl = h('div', { class: 'stat' });
+  const body = h('div', { class: 'panel-body' }, h('p', { class: 'note', text: t('toilet.desc') }));
   const refs: (() => void)[] = [];
-
-  // кабинки
-  const stallRows: HTMLDivElement[] = [h('div', { class: 'stall-row' })];
-  for (let i = 1; i < 4; i++) stallRows.push(h('div', { class: 'stall-row' }));
-  stallRows.forEach((r) => body.appendChild(r));
-  body.appendChild(bonusEl);
-
-  const stallNames = [t('room.stall.1'), t('room.stall.2'), t('room.stall.3'), t('room.stall.4')];
-
+  // Все кабинки — одинаковые строки, как в зоне отдыха. На кнопке — прибавка этой кабинки и её цена.
   for (let i = 0; i < 4; i++) {
-    const row = i === 0 ? stallRows[0] : stallRows[i];
-    const open = g.toiletStallOpen(i);
-    const cost = i === 0 ? 0 : g.toiletStallCost(i);
-
-    const nameEl = h('span', { class: 'stall-name' });
-    row.appendChild(nameEl);
-
-    if (i > 0) {
-      const buy = () => g.buyToiletStall(i);
-      const btn = buyButton(buy, ctx);
-      row.appendChild(btn.el);
-      refs.push(() => {
-        if (open) btn.set({ label: t('room.stall.opened'), enabled: false, done: true });
-        else btn.set({ label: fmt(cost), cost: fmt(cost), enabled: g.canAfford(cost), best: false });
-      });
-    }
-
-    const statusEl = h('span', { class: 'stall-status' });
-    nameEl.appendChild(statusEl);
-
+    const info = h('div', { class: 'w-inc' });
+    const btn = buyButton(() => g.buyToiletStall(i), ctx);
+    body.append(h('div', { class: 'worker' }, h('div', { class: 'w-main' }, h('div', { class: 'w-name', text: t(`room.stall.${i + 1}` as Key) }), info), btn.el));
     refs.push(() => {
-      if (open) {
-        nameEl.textContent = stallNames[i];
-        statusEl.textContent = '✓';
-        if (i > 0) {
-          const b = row.querySelector('button');
-          if (b) b.remove();
-        }
-      } else {
-        nameEl.textContent = stallNames[i];
-        statusEl.textContent = '';
-        if (i > 0) {
-          const b = row.querySelector('button');
-          if (!b) {
-            const buy = () => g.buyToiletStall(i);
-            const btn = buyButton(buy, ctx);
-            row.appendChild(btn.el);
-          }
-        }
+      const bonus = Math.round((i === 0 ? TOILET_BONUS : TOILET_STALLS.bonus[i]) * 100);
+      if (g.toiletStallOpen(i)) {
+        info.textContent = i === 0 ? t('toilet.stallFirst', { n: bonus }) : t('rest.bonus', { n: bonus });
+        btn.set({ label: t('room.stall.opened'), enabled: false, done: true });
+        return;
       }
+      const cost = g.toiletStallCost(i);
+      if (!g.toiletStallAvailable(i)) {
+        // следующая кабинка — только после предыдущей: показываем закрытой, а не «можно купить»
+        info.textContent = t('toilet.needPrev', { n: i });
+        btn.set({ label: `🔒 +${bonus}%`, cost: fmt(cost), enabled: false });
+        return;
+      }
+      info.textContent = t('toilet.stallGives', { n: bonus });
+      btn.set({ label: `+${bonus}%`, cost: fmt(cost), enabled: g.canAfford(cost) });
     });
   }
-
-  // базовое описание
-  body.prepend(h('p', { class: 'note', text: t('toilet.desc') }));
-
-  return {
-    title: t('room.toilet'),
-    body,
-    refresh() {
-      // обновить цены и доступность кнопок
-      refs.forEach((f) => f());
-      // показать суммарный бонус
-      let totalBonus = TOILET_BONUS;
-      for (let i = 0; i < 4; i++) if (g.toiletStallOpen(i)) totalBonus += TOILET_STALLS.bonus[i];
-      bonusEl.textContent = `+${Math.round(totalBonus * 100)}% ${t('toilet.bonus')}`;
-    },
-  };
+  return { title: t('room.toilet'), body, refresh: () => refs.forEach((f) => f()) };
 }
 
 // ---------- Гранты ----------
@@ -626,7 +585,10 @@ export function grantsPanel(ctx: Ctx): Panel {
     refs.push(() => {
       const l = g.shopLevel(item.key);
       const d = t(`shop.${item.kind}.d` as Key);
-      if (item.kind === 'culture') info.textContent = `${d} · ×${g.cultureMult().toFixed(2)}`;
+      if (item.kind === 'culture') {
+        const m = g.cultureMult();
+        info.textContent = `${d}. ${t('shop.culture.now', { m: m.toFixed(2).replace('.', ','), p: Math.round((m - 1) * 100) })}`;
+      }
       else if (item.kind === 'startCapital') info.textContent = `${d} · ${fmt(g.startCapital())}`;
       else info.textContent = `${d} · ${l}/${item.max}`;
       const cost = g.shopCost(item.key);
@@ -648,7 +610,7 @@ export function grantsPanel(ctx: Ctx): Panel {
       pending.textContent = `${t('grants.pending')}: ${fmt(p)}`;
       earned.textContent = `${t('grants.earned')}: ${fmt(g.state.companyGrants)}`;
       if (!g.canReorg()) {
-        hint.textContent = t('grants.reorgNeed', { n: fmt(g.earnedForGrants(20)) });
+        hint.textContent = t('grants.reorgNeed', { n: fmt(g.earnedForGrants(20)), have: fmt(g.run.earned) });
         hint.className = 'note small';
       } else if (g.reorgIsGood()) {
         hint.textContent = t('grants.reorgHintGood');
