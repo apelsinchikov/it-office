@@ -53,6 +53,8 @@ export class Hud {
     return b && b > 0 ? b + 6 : 70;
   }
   private topEl: HTMLElement | null = null;
+  /** Последнее записанное значение кольца «Аврала». */
+  private avralP = '';
   private readonly root: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly rate: HTMLElement;
@@ -317,22 +319,33 @@ export class Hud {
   update(now: number): void {
     const g = this.game;
     // «Аврал» — каждый кадр, чтобы кольцо шло плавно
+    // в DOM пишем только изменившееся: лишние записи каждый кадр заставляют браузер пересчитывать стили
     let pc = 0;
+    let label: string;
     if (g.isAvral()) {
       pc = g.avralLeft / 30;
-      this.avralLabel.textContent = `×3 ${Math.ceil(g.avralLeft)}`;
+      label = `×3 ${Math.ceil(g.avralLeft)}`;
     } else if (g.avralCooldown > 0) {
       pc = 1 - g.avralCooldown / 150;
-      this.avralLabel.textContent = `${Math.ceil(g.avralCooldown)}`;
+      label = `${Math.ceil(g.avralCooldown)}`;
     } else {
       pc = 1;
-      this.avralLabel.textContent = t('avral');
+      label = t('avral');
     }
-    this.avralBtn.style.setProperty('--p', `${(pc * 100).toFixed(1)}%`);
-    this.avralBtn.classList.toggle('ready', g.canAvral());
-    this.avralBtn.classList.toggle('active', g.isAvral());
     // «Аврал» объявляет директор IT — до его кабинета кнопки нет
-    this.avralBtn.style.display = g.roomOpen('director') && !this.sheet ? '' : 'none';
+    const shown = g.roomOpen('director') && !this.sheet;
+    const display = shown ? '' : 'none';
+    if (this.avralBtn.style.display !== display) this.avralBtn.style.display = display;
+    if (shown) {
+      if (this.avralLabel.textContent !== label) this.avralLabel.textContent = label;
+      const p = `${(pc * 100).toFixed(1)}%`;
+      if (p !== this.avralP) {
+        this.avralP = p;
+        this.avralBtn.style.setProperty('--p', p);
+      }
+      this.avralBtn.classList.toggle('ready', g.canAvral());
+      this.avralBtn.classList.toggle('active', g.isAvral());
+    }
 
     if (now - this.last < 200) return;
     this.last = now;

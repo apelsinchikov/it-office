@@ -25,6 +25,8 @@ interface TgWebApp {
   requestFullscreen?(): void;
   isFullscreen?: boolean;
   onEvent?(event: string, cb: () => void): void;
+  /** Bot API 8.0+: false, когда Mini App свёрнуто или закрыто другой вкладкой Telegram. */
+  isActive?: boolean;
 }
 
 declare global {
@@ -48,6 +50,17 @@ export function onTelegramLayout(cb: () => void): void {
   const tg = window.Telegram?.WebApp;
   if (!tg?.onEvent) return;
   for (const ev of ['fullscreenChanged', 'safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']) tg.onEvent(ev, cb);
+}
+
+/**
+ * Свёрнуто ли Mini App (Bot API 8.0+: события activated / deactivated).
+ * Свёрнутое приложение остаётся «видимым» для браузера, поэтому visibilitychange тут не помогает.
+ */
+export function onTelegramActive(cb: (active: boolean) => void): void {
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.onEvent) return;
+  tg.onEvent('activated', () => cb(true));
+  tg.onEvent('deactivated', () => cb(false));
 }
 
 /**

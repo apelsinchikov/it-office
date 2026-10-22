@@ -838,17 +838,21 @@ export class Character {
         // держит геймпад: руки согнуты к центру, палец жмёт
         this.phase += dt * 9 * this.speed;
         // левая рука тоже вперёд (поверх торса) — для вида спереди и сзади
+        // Переставляем только когда порядок сбился: каждая перестановка в PixiJS 8 пересобирает всю сцену.
         const bob = r.bob;
-        bob.removeChild(r.armL);
-        bob.addChild(r.armL);
-        // джойстик поверх рук: перемещаем в самый конец bob
-        if (r === this.front && this.padG && this.padG.parent === bob) {
-          bob.removeChild(this.padG);
-          bob.addChild(this.padG);
-        }
-        if (r === this.back && this.padBG && this.padBG.parent === bob) {
-          bob.removeChild(this.padBG);
-          bob.addChild(this.padBG);
+        const pad = r === this.front ? this.padG : r === this.back ? this.padBG : null;
+        const padHere = pad && pad.parent === bob ? pad : null;
+        const kids = bob.children;
+        const n = kids.length;
+        const inOrder = padHere ? kids[n - 1] === padHere && kids[n - 2] === r.armL : kids[n - 1] === r.armL;
+        if (!inOrder) {
+          bob.removeChild(r.armL);
+          bob.addChild(r.armL);
+          // джойстик поверх рук: перемещаем в самый конец bob
+          if (padHere) {
+            bob.removeChild(padHere);
+            bob.addChild(padHere);
+          }
         }
         // ±0.4 — руки направлены к центру (джойстик на уровне груди), микровибрация для анимации нажатия
         r.armR.rotation = 0.4 + 0.03 * Math.sin(this.phase);

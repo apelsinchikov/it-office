@@ -34,6 +34,12 @@ export class Camera {
   private moved = false;
   private pinch: { dist: number; scale: number; world: Pt } | null = null;
   private anim: { t: number; from: Pt; fromScale: number; to: Pt; toScale: number } | null = null;
+  private wheelAt = 0;
+
+  /** Камера сейчас двигается (палец на экране, щипок, колесо, подлёт) — нужна плавная картинка. */
+  get busy(): boolean {
+    return this.pointers.size > 0 || this.anim !== null || performance.now() - this.wheelAt < 300;
+  }
 
   constructor(
     private readonly target: Container,
@@ -200,6 +206,7 @@ export class Camera {
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     this.anim = null;
+    this.wheelAt = performance.now();
     const p = { x: e.clientX, y: e.clientY };
     this.zoomAround(p, this.toWorld(p), this.target.scale.x * Math.exp(-e.deltaY * 0.0015));
   };

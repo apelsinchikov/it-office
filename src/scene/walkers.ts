@@ -4,6 +4,7 @@ import { Container } from 'pixi.js';
 import type { PhraseGroup } from '../game/phrases';
 import { Character, TESTER_LOOK, randomLook, type Dir, type Outfit } from './characters';
 import { P, ROOMS, floorBounds, isoToWorld, roomById, roomWorld, worldToIso, type Pt, type RoomDef } from './layout';
+import { setDepth } from './draw';
 import { LOUNGE_SPOTS, toiletSpots } from './rooms';
 
 /** Клетка сетки: 1/16 комнаты — в коридоре 3–4 клетки, хватает на отступы от стен и на обход. */
@@ -221,11 +222,11 @@ export class Walker {
 
   private place(): void {
     this.char.root.position.set(this.pos.x, this.pos.y);
-    this.char.root.zIndex = this.pos.y;
+    setDepth(this.char.root, this.pos.y);
     if (this.seated) {
       // сидит на подушке дивана — чуть выше пола
       this.seated.root.position.set(this.pos.x, this.pos.y - 10);
-      this.seated.root.zIndex = this.pos.y + 1;
+      this.seated.root.zIndex = this.char.root.zIndex + 1;
     }
   }
 

@@ -1625,3 +1625,10 @@ body.avral #game::after {
   80% { width: 85%; }
   100% { width: 95%; }
 }
+
+/* игра на паузе (свёрнута): бесконечные CSS-анимации тоже стоят */
+body.paused *,
+body.paused *::before,
+body.paused *::after {
+  animation-play-state: paused !important;
+}

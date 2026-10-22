@@ -20,7 +20,7 @@ import * as furnitureM from './scene/furniture';
 import { ROOM_H, ROOM_W, WALL_H, roomById, type RoomDef } from './scene/layout';
 import { OfficeView } from './scene/office';
 import { FACE_IMG_REF, FACE_TEXTURE, setTesterFace, TESTER_LOOK } from './scene/characters';
-import { initTelegram, onTelegramLayout, waitForUser } from './telegram';
+import { initTelegram, onTelegramActive, onTelegramLayout, waitForUser } from './telegram';
 import { Fx } from './ui/fx';
 import { Hud } from './ui/hud';
 import { DebugNotes } from './ui/debugNotes';
@@ -30,6 +30,12 @@ const VERSION = '1.0.0';
 const SAVE_LOCAL_MS = 5000;
 const SAVE_CLOUD_MS = 45000;
 const OFFLINE_MIN_SEC = 60;
+/** Кадров в секунду: в покое, когда двигают камеру, и под панелью на весь экран (офиса не видно). */
+const FPS_IDLE = 30;
+const FPS_CAMERA = 60;
+const FPS_UNDER_SHEET = 10;
+/** Ширина, начиная с которой панель — колонка справа, а не на весь экран (как в style.css). */
+const SHEET_COLUMN_MIN_W = 640;
 
 /**
  * Результат предзагрузки.
@@ -129,7 +135,8 @@ async function start(): Promise<void> {
   await app.init({
     resizeTo: gameEl,
     background: '#262338',
-    antialias: true,
+    // ?aa=0 — без сглаживания, чтобы сравнить картинку и нагрев на телефоне
+    antialias: new URLSearchParams(location.search).get('aa') !== '0',
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
@@ -172,8 +179,15 @@ async function start(): Promise<void> {
   app.renderer.background.color = office.themeBg;
   app.stage.addChild(office.container);
 
+  // Игра «закрыта»: Mini App свёрнуто или ушло в фон. Тогда стоит всё — отрисовка, экономика, таймеры,
+  // а при возврате начисляется офлайн-доход, как после полного закрытия.
+  let paused = false;
+  let pausedAt = 0;
+
   const save = (): void => saveLocal(game.state);
   const saveAll = (): void => {
+    // на паузе состояние уже сохранено в момент паузы; новое сохранение сдвинуло бы lastSeen и съело офлайн-доход
+    if (paused) return;
     save();
     void saveCloud(game.state);
     void saveRemote(game.state, false, Math.floor(game.completion() * 100));
@@ -326,7 +340,9 @@ async function start(): Promise<void> {
     }
   }
   if ('ResizeObserver' in window) new ResizeObserver(() => syncSize()).observe(gameEl);
-  window.setInterval(syncSize, 500);
+  window.setInterval(() => {
+    if (!paused) syncSize();
+  }, 500);
   for (const ev of ['pageshow', 'focus', 'orientationchange']) window.addEventListener(ev, () => requestAnimationFrame(syncSize));
 
   // Видеокарта может отобрать контекст WebGL, пока игра долго в фоне: экран становится чёрным.
@@ -383,22 +399,43 @@ async function start(): Promise<void> {
   else offerOffline((Date.now() - originalLastSeen) / 1000);
   if (eventId) hud.setEvent(t(`event.${eventId}` as Key), eventMod(eventId as EventId | null));
 
-  // свёрнута игра — не тикаем, при возврате считаем офлайн
-  let hiddenAt = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') requestAnimationFrame(syncSize);
-    if (document.visibilityState === 'hidden') {
-      hiddenAt = Date.now();
-      saveAll();
-    } else if (hiddenAt) {
-      const sec = (Date.now() - hiddenAt) / 1000;
-      hiddenAt = 0;
-      if (!tutorial.active) offerOffline(sec);
-    }
+  // Свёрнута игра (вкладка в фоне или Mini App свёрнуто в Telegram) — полная пауза, как будто игру закрыли:
+  // сохраняемся, останавливаем отрисовку и экономику; при возврате — офлайн-доход за время паузы.
+  // Начальному isActive не доверяем (если клиент ошибётся, игра стартовала бы на паузе с пустым экраном) —
+  // только событиям activated / deactivated.
+  let tgActive = true;
+  const shouldRun = (): boolean => document.visibilityState !== 'hidden' && tgActive;
+  const pauseGame = (): void => {
+    if (paused) return;
+    saveAll(); // ещё до флага: записываем состояние и момент паузы (lastSeen)
+    paused = true;
+    pausedAt = Date.now();
+    app.ticker.stop();
+    document.body.classList.add('paused');
+  };
+  const resumeGame = (): void => {
+    if (!paused) return;
+    paused = false;
+    document.body.classList.remove('paused');
+    app.ticker.start();
+    requestAnimationFrame(syncSize);
+    const sec = (Date.now() - pausedAt) / 1000;
+    if (!tutorial.active) offerOffline(sec);
+  };
+  const syncRun = (): void => (shouldRun() ? resumeGame() : pauseGame());
+  document.addEventListener('visibilitychange', syncRun);
+  onTelegramActive((active) => {
+    tgActive = active;
+    syncRun();
   });
+  if (!shouldRun()) pauseGame();
+
   window.addEventListener('pagehide', saveAll);
-  window.setInterval(save, SAVE_LOCAL_MS);
   window.setInterval(() => {
+    if (!paused) save();
+  }, SAVE_LOCAL_MS);
+  window.setInterval(() => {
+    if (paused) return;
     void saveCloud(game.state);
     void saveRemote(game.state, false, Math.floor(game.completion() * 100));
   }, SAVE_CLOUD_MS);
@@ -407,6 +444,7 @@ async function start(): Promise<void> {
   let lastClaimable = claimableCount(game);
   let sec = 0;
   window.setInterval(() => {
+    if (paused) return;
     sec++;
     for (const id of checkAchievements(game.state)) {
       const a = ACHIEVEMENTS.find((x) => x.id === id);
@@ -437,6 +475,11 @@ async function start(): Promise<void> {
   }, 1000);
 
   let frameErrors = 0;
+  // Длинный кадр не должен терять время экономики: по умолчанию PixiJS режет шаг до 0,1 с (minFPS 10),
+  // а при 10–30 кадрах в секунду кадр бывает длиннее. Шаг всё равно ограничен 1 с ниже.
+  let fpsNow = FPS_IDLE;
+  app.ticker.maxFPS = FPS_IDLE;
+  app.ticker.minFPS = 1;
   app.ticker.add((ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 1);
     // ошибка в одном кадре не должна останавливать игру целиком
@@ -449,6 +492,13 @@ async function start(): Promise<void> {
       notes?.update();
       hud.update(performance.now());
       document.body.classList.toggle('avral', game.isAvral());
+      // 60 кадров нужны только пока двигают камеру; под панелью на весь экран офиса не видно
+      const underSheet = hud.isOpen() && window.innerWidth < SHEET_COLUMN_MIN_W;
+      const fps = underSheet ? FPS_UNDER_SHEET : camera.busy ? FPS_CAMERA : FPS_IDLE;
+      if (fps !== fpsNow) {
+        fpsNow = fps;
+        app.ticker.maxFPS = fps;
+      }
     } catch (err) {
       if (frameErrors++ < 5) console.error(err);
     }

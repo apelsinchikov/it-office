@@ -1,9 +1,17 @@
 // Рисование в стиле Б: заливка + тёмный контур 3px со скруглёнными углами.
 // Формы берутся прямо из рисунков на холсте (те же координаты и пути SVG).
 
-import { Graphics } from 'pixi.js';
+import { Graphics, type Container } from 'pixi.js';
 
 export const OUT = 0x262338;
+
+/**
+ * Глубина для идущего человека. В PixiJS 8 каждая смена zIndex заставляет заново собирать всю сцену,
+ * поэтому глубину меняем, только когда человек сдвинулся заметно (на 3 px). Глазу разница не видна.
+ */
+export function setDepth(o: Container, z: number, eps = 3): void {
+  if (Math.abs(o.zIndex - z) >= eps) o.zIndex = z;
+}
 
 /** Разбирает путь SVG из команд M, L, Q, Z (абсолютные координаты) и рисует его в g. */
 export function path(g: Graphics, d: string): Graphics {

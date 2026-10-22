@@ -7,7 +7,7 @@ import type { Game, GameEvent } from '../game/game';
 import { DEPT_GROUP, LEAD_GROUP, type PhraseGroup } from '../game/phrases';
 import { FEMALE, t, type Key } from '../i18n';
 import { Character, DIRECTOR_LOOK, randomLook, type Look, type Outfit } from './characters';
-import { OUT, circle, ellipse, line, poly, rect, shade } from './draw';
+import { OUT, circle, ellipse, line, poly, rect, setDepth, shade } from './draw';
 import {
   chairBack,
   codeLines,
@@ -319,7 +319,7 @@ class RoomWalker {
         r.x += (dx / d) * step;
         r.y += (dy / d) * step;
       }
-      r.zIndex = r.y;
+      setDepth(r, r.y);
     }
     this.char.update(dt);
   }

@@ -204,6 +204,7 @@ export class Fx {
 
   update(dt: number): void {
     this.time += dt;
+    topY = readTopLimit();
     // издалека фразы закрыли бы весь офис — показываем их только вблизи
     const near = this.scale() >= 0.45;
     if (this.enabled && near) this.tryStart();
@@ -229,8 +230,10 @@ export class Fx {
     const s = Math.max(0.6, Math.min(1.2, this.scale() * 1.6));
     const W = window.innerWidth;
     const H = window.innerHeight;
+    // край верхней полосы читаем один раз за кадр (в начале update): чтение размеров после записи стилей заставляет браузер пересчитать страницу
+    const top = topY;
     /** Точка за краем экрана: такие пузыри и тикеты прячем, а не прижимаем к краю. */
-    const off = (p: Pt, pad = 0): boolean => p.x < -pad || p.x > W + pad || p.y < topLimit() - pad || p.y > H + pad;
+    const off = (p: Pt, pad = 0): boolean => p.x < -pad || p.x > W + pad || p.y < top - pad || p.y > H + pad;
     for (const t of this.tickets.values()) {
       const a = this.office.ticketAnchor(t.d, t.k);
       if (!a) continue;
@@ -269,7 +272,7 @@ export class Fx {
         box.y = o.y - box.h - 2;
       }
       const shifted = box.y < p.y - bh - 7;
-      const blocked = box.y < topLimit() || taken.some((c) => hit(box, c));
+      const blocked = box.y < top || taken.some((c) => hit(box, c));
       b.el.style.opacity = blocked ? '0' : '';
       b.el.classList.toggle('lifted', shifted);
       if (!blocked) taken.push(box);
@@ -310,15 +313,23 @@ export class Fx {
         return;
       }
       m.style.display = '';
-      m.className = `room-badge ${bd.kind}`;
+      const cls = `room-badge ${bd.kind}`;
+      if (m.className !== cls) m.className = cls;
       if (m.textContent !== bd.text) m.textContent = bd.text;
       m.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
     });
   }
 }
 
-/** Нижний край верхней полосы: выше фразы не показываем. */
+/** Край верхней полосы, прочитанный в начале кадра (см. update). */
+let topY = 76;
+
+/** Нижний край верхней полосы: выше фразы не показываем. Значение одно на кадр. */
 function topLimit(): number {
+  return topY;
+}
+
+function readTopLimit(): number {
   const b = document.querySelector('.topbar')?.getBoundingClientRect().bottom;
   return b && b > 0 ? b + 4 : 76;
 }
