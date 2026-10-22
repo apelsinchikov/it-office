@@ -7,7 +7,7 @@ Telegram Mini App на GitHub Pages (`src/telegram.ts`, `.github/workflows`, `vi
 ## Requirements
 
 ### Requirement: Хостинг
-Игра MUST раздаваться только с GitHub Pages; Cloudflare не использовать (блокирует пользователей из России). Прогресс и рейтинг — в Supabase (проект `fytodyhctsidtqssolds`, только RPC-функции, см. спеку saves); своего сервера нет.
+Игра MUST раздаваться только с GitHub Pages; Cloudflare не использовать (блокирует пользователей из России). Прогресс и рейтинг — в Supabase (проект `fytodyhctsidtqssolds`, Edge Function `progress`, см. спеку saves). Cloudflare и другой свой хостинг не используются.
 
 ### Requirement: Выкладка
 Push в `main` MUST запускать GitHub Actions: `npm test`, `npm run build`, публикация на Pages. Коммиты — от `apelsinchikov`, без трейлеров Claude.

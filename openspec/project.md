@@ -13,7 +13,7 @@ Idle-тайкун «IT-офис» в Telegram Mini App. Игрок прокач�
 
 ## Стек
 
-TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс поверх canvas), vitest. Без сервера и БД.
+TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс поверх canvas), vitest. Сервер — Supabase: Edge Function `progress` + Postgres (прогресс и рейтинг).
 
 ## Карта кода
 
@@ -24,7 +24,7 @@ TypeScript, Vite 6, PixiJS 8 (сцена), HTML/CSS (интерфейс пове
 | `src/game/game.ts` | класс `Game`: состояние забега, покупки, тики, события `GameEvent` | все игровые |
 | `src/game/state.ts` | схема сохранения v3, `newState`, `normalize` (миграции v1/v2), `completionFromState()`, `progressScore()` | saves |
 | `src/game/save.ts` | localStorage + Telegram CloudStorage | saves |
-| `src/game/remote.ts`, `supabase/migrations/` | Supabase: прогресс и рейтинг (RPC с проверкой initData, `company_progress`, `company_reorgs`) | saves, hud |
+| `src/game/remote.ts`, `supabase/functions/progress/`, `supabase/migrations/` | Supabase: клиент → Edge Function `progress` → функции базы `srv_*` (мягкая проверка initData, `auth_kind`); прогресс и рейтинг | saves, hud |
 | `src/game/resets.ts`, `public/resets.json`, `scripts/reset-player.mjs` | сброс отдельного игрока по списку | saves |
 | `src/game/director.ts` | задания директора IT, перки, инвентарь | director |
 | `src/game/advisor.ts` | «Быстрее окупится»: лучшая покупка по окупаемости | hud |
